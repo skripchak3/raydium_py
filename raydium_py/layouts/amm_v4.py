@@ -1,4 +1,16 @@
-from construct import Bytes, Int32ul, Int8ul, Int64ul, Padding, BitsInteger, BitsSwapped, BitStruct, Const, Flag, BytesInteger
+from construct import (
+    Bytes,
+    Int32ul,
+    Int8ul,
+    Int64ul,
+    Padding,
+    BitsInteger,
+    BitsSwapped,
+    BitStruct,
+    Const,
+    Flag,
+    BytesInteger,
+)
 from construct import Struct as cStruct
 
 LIQUIDITY_STATE_LAYOUT_V4 = cStruct(
@@ -55,7 +67,7 @@ LIQUIDITY_STATE_LAYOUT_V4 = cStruct(
     "pnlOwner" / Bytes(32),
 )
 
-ACCOUNT_FLAGS_LAYOUT = BitsSwapped(  
+ACCOUNT_FLAGS_LAYOUT = BitsSwapped(
     BitStruct(
         "initialized" / Flag,
         "market" / Flag,

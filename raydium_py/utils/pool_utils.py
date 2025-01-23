@@ -21,6 +21,7 @@ from raydium.constants import (
     DEFAULT_QUOTE_MINT,
 )
 
+
 @dataclass
 class AmmV4PoolKeys:
     amm_id: Pubkey
@@ -42,6 +43,7 @@ class AmmV4PoolKeys:
     ray_authority_v4: Pubkey
     open_book_program: Pubkey
     token_program_id: Pubkey
+
 
 @dataclass
 class CpmmPoolKeys:
@@ -68,6 +70,7 @@ class CpmmPoolKeys:
     fund_fees_token_0: int
     fund_fees_token_1: int
     open_time: int
+
 
 @dataclass
 class ClmmPoolKeys:
@@ -107,29 +110,41 @@ class ClmmPoolKeys:
     fund_fees_token_0: int
     fund_fees_token_1: int
 
+
 class DIRECTION(Enum):
     BUY = 0
     SELL = 1
 
+
 def fetch_amm_v4_pool_keys(pair_address: str) -> Optional[AmmV4PoolKeys]:
-    
+
     def bytes_of(value):
         if not (0 <= value < 2**64):
             raise ValueError("Value must be in the range of a u64 (0 to 2^64 - 1).")
-        return struct.pack('<Q', value)
-   
+        return struct.pack("<Q", value)
+
     try:
         amm_id = Pubkey.from_string(pair_address)
-        amm_data = client.get_account_info_json_parsed(amm_id, commitment=Processed).value.data
+        amm_data = client.get_account_info_json_parsed(
+            amm_id, commitment=Processed
+        ).value.data
         amm_data_decoded = LIQUIDITY_STATE_LAYOUT_V4.parse(amm_data)
         marketId = Pubkey.from_bytes(amm_data_decoded.serumMarket)
-        marketInfo = client.get_account_info_json_parsed(marketId, commitment=Processed).value.data
+        marketInfo = client.get_account_info_json_parsed(
+            marketId, commitment=Processed
+        ).value.data
         market_decoded = MARKET_STATE_LAYOUT_V3.parse(marketInfo)
         vault_signer_nonce = market_decoded.vault_signer_nonce
-        
-        ray_authority_v4=Pubkey.from_string("5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1")
-        open_book_program=Pubkey.from_string("srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX")
-        token_program_id=Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+
+        ray_authority_v4 = Pubkey.from_string(
+            "5Q544fKrFoe6tsEbD7S8EmxGTJYAKtTVhAW5Q5pge4j1"
+        )
+        open_book_program = Pubkey.from_string(
+            "srmqPvymJeFKQ4zGQed1GFppgkRHL9kaELCbyksJtPX"
+        )
+        token_program_id = Pubkey.from_string(
+            "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
+        )
 
         pool_keys = AmmV4PoolKeys(
             amm_id=amm_id,
@@ -142,7 +157,10 @@ def fetch_amm_v4_pool_keys(pair_address: str) -> Optional[AmmV4PoolKeys]:
             base_vault=Pubkey.from_bytes(amm_data_decoded.poolCoinTokenAccount),
             quote_vault=Pubkey.from_bytes(amm_data_decoded.poolPcTokenAccount),
             market_id=marketId,
-            market_authority=Pubkey.create_program_address(seeds=[bytes(marketId), bytes_of(vault_signer_nonce)], program_id=open_book_program),
+            market_authority=Pubkey.create_program_address(
+                seeds=[bytes(marketId), bytes_of(vault_signer_nonce)],
+                program_id=open_book_program,
+            ),
             market_base_vault=Pubkey.from_bytes(market_decoded.base_vault),
             market_quote_vault=Pubkey.from_bytes(market_decoded.quote_vault),
             bids=Pubkey.from_bytes(market_decoded.bids),
@@ -150,7 +168,7 @@ def fetch_amm_v4_pool_keys(pair_address: str) -> Optional[AmmV4PoolKeys]:
             event_queue=Pubkey.from_bytes(market_decoded.event_queue),
             ray_authority_v4=ray_authority_v4,
             open_book_program=open_book_program,
-            token_program_id=token_program_id
+            token_program_id=token_program_id,
         )
 
         return pool_keys
@@ -158,16 +176,21 @@ def fetch_amm_v4_pool_keys(pair_address: str) -> Optional[AmmV4PoolKeys]:
         print(f"Error fetching pool keys: {e}")
         return None
 
+
 def fetch_cpmm_pool_keys(pair_address: str) -> Optional[CpmmPoolKeys]:
     try:
         pool_state = Pubkey.from_string(pair_address)
-        raydium_vault_auth_2 = Pubkey.from_string("GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL")
-        pool_state_data = client.get_account_info_json_parsed(pool_state, commitment=Processed).value.data
+        raydium_vault_auth_2 = Pubkey.from_string(
+            "GpMZbSM2GgvTKHJirzeGfMFoaZ8UR2X7F4v8vHTvxFbL"
+        )
+        pool_state_data = client.get_account_info_json_parsed(
+            pool_state, commitment=Processed
+        ).value.data
         parsed_data = CPMM_POOL_STATE_LAYOUT.parse(pool_state_data)
 
         pool_keys = CpmmPoolKeys(
             pool_state=pool_state,
-            raydium_vault_auth_2 = raydium_vault_auth_2,
+            raydium_vault_auth_2=raydium_vault_auth_2,
             amm_config=Pubkey.from_bytes(parsed_data.amm_config),
             pool_creator=Pubkey.from_bytes(parsed_data.pool_creator),
             token_0_vault=Pubkey.from_bytes(parsed_data.token_0_vault),
@@ -190,34 +213,42 @@ def fetch_cpmm_pool_keys(pair_address: str) -> Optional[CpmmPoolKeys]:
             fund_fees_token_1=parsed_data.fund_fees_token_1,
             open_time=parsed_data.open_time,
         )
-        
+
         return pool_keys
-    
+
     except Exception as e:
         print(f"Error fetching pool keys: {e}")
         return None
 
-def fetch_clmm_pool_keys(pair_address: str, zero_for_one: bool = True) -> Optional[ClmmPoolKeys]:
-    def calculate_start_index(tick_current: int, tick_spacing: int, tick_array_size: int = 60) -> int:
-        return (tick_current // (tick_spacing * tick_array_size)) * (tick_spacing * tick_array_size)
+
+def fetch_clmm_pool_keys(
+    pair_address: str, zero_for_one: bool = True
+) -> Optional[ClmmPoolKeys]:
+    def calculate_start_index(
+        tick_current: int, tick_spacing: int, tick_array_size: int = 60
+    ) -> int:
+        return (tick_current // (tick_spacing * tick_array_size)) * (
+            tick_spacing * tick_array_size
+        )
 
     def get_pda_tick_array_address(pool_id: Pubkey, start_index: int):
         tick_array, _ = Pubkey.find_program_address(
-            [b"tick_array", bytes(pool_id), struct.pack(">i", start_index)], 
-            RAYDIUM_CLMM
+            [b"tick_array", bytes(pool_id), struct.pack(">i", start_index)],
+            RAYDIUM_CLMM,
         )
         return tick_array
 
     def get_pda_tick_array_bitmap_extension(pool_id: Pubkey):
         bitmap_extension, _ = Pubkey.find_program_address(
-            [b"pool_tick_array_bitmap_extension", bytes(pool_id)],
-            RAYDIUM_CLMM
+            [b"pool_tick_array_bitmap_extension", bytes(pool_id)], RAYDIUM_CLMM
         )
         return bitmap_extension
 
     try:
         pool_state = Pubkey.from_string(pair_address)
-        pool_state_data = client.get_account_info_json_parsed(pool_state, commitment=Processed).value.data
+        pool_state_data = client.get_account_info_json_parsed(
+            pool_state, commitment=Processed
+        ).value.data
         parsed_data = CLMM_POOL_STATE_LAYOUT.parse(pool_state_data)
 
         tick_spacing = int(parsed_data.tick_spacing)
@@ -272,7 +303,7 @@ def fetch_clmm_pool_keys(pair_address: str, zero_for_one: bool = True) -> Option
             total_fees_token_1=parsed_data.total_fees_token_1,
             total_fees_claimed_token_1=parsed_data.total_fees_claimed_token_1,
             fund_fees_token_0=parsed_data.fund_fees_token_0,
-            fund_fees_token_1=parsed_data.fund_fees_token_1
+            fund_fees_token_1=parsed_data.fund_fees_token_1,
         )
 
         return pool_keys
@@ -281,60 +312,76 @@ def fetch_clmm_pool_keys(pair_address: str, zero_for_one: bool = True) -> Option
         print(f"Error fetching pool keys: {e}")
         return None
 
+
 def make_amm_v4_swap_instruction(
-    amount_in: int, 
-    minimum_amount_out: int, 
-    token_account_in: Pubkey, 
-    token_account_out: Pubkey, 
+    amount_in: int,
+    minimum_amount_out: int,
+    token_account_in: Pubkey,
+    token_account_out: Pubkey,
     accounts: AmmV4PoolKeys,
-    owner: Pubkey
+    owner: Pubkey,
 ) -> Instruction:
     try:
-        
+
         keys = [
-            AccountMeta(pubkey=accounts.token_program_id, is_signer=False, is_writable=False),
+            AccountMeta(
+                pubkey=accounts.token_program_id, is_signer=False, is_writable=False
+            ),
             AccountMeta(pubkey=accounts.amm_id, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.ray_authority_v4, is_signer=False, is_writable=False),
+            AccountMeta(
+                pubkey=accounts.ray_authority_v4, is_signer=False, is_writable=False
+            ),
             AccountMeta(pubkey=accounts.open_orders, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.target_orders, is_signer=False, is_writable=True),
+            AccountMeta(
+                pubkey=accounts.target_orders, is_signer=False, is_writable=True
+            ),
             AccountMeta(pubkey=accounts.base_vault, is_signer=False, is_writable=True),
             AccountMeta(pubkey=accounts.quote_vault, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.open_book_program, is_signer=False, is_writable=False), 
+            AccountMeta(
+                pubkey=accounts.open_book_program, is_signer=False, is_writable=False
+            ),
             AccountMeta(pubkey=accounts.market_id, is_signer=False, is_writable=True),
             AccountMeta(pubkey=accounts.bids, is_signer=False, is_writable=True),
             AccountMeta(pubkey=accounts.asks, is_signer=False, is_writable=True),
             AccountMeta(pubkey=accounts.event_queue, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.market_base_vault, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.market_quote_vault, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.market_authority, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=token_account_in, is_signer=False, is_writable=True),  
-            AccountMeta(pubkey=token_account_out, is_signer=False, is_writable=True), 
-            AccountMeta(pubkey=owner, is_signer=True, is_writable=False) 
+            AccountMeta(
+                pubkey=accounts.market_base_vault, is_signer=False, is_writable=True
+            ),
+            AccountMeta(
+                pubkey=accounts.market_quote_vault, is_signer=False, is_writable=True
+            ),
+            AccountMeta(
+                pubkey=accounts.market_authority, is_signer=False, is_writable=False
+            ),
+            AccountMeta(pubkey=token_account_in, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=token_account_out, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=owner, is_signer=True, is_writable=False),
         ]
-        
+
         data = bytearray()
         discriminator = 9
-        data.extend(struct.pack('<B', discriminator))
-        data.extend(struct.pack('<Q', amount_in))
-        data.extend(struct.pack('<Q', minimum_amount_out))
+        data.extend(struct.pack("<B", discriminator))
+        data.extend(struct.pack("<Q", amount_in))
+        data.extend(struct.pack("<Q", minimum_amount_out))
         swap_instruction = Instruction(RAYDIUM_AMM_V4, bytes(data), keys)
-        
+
         return swap_instruction
     except Exception as e:
         print(f"Error occurred: {e}")
         return None
 
-def make_cpmm_swap_instruction( 
-    amount_in: int, 
-    minimum_amount_out: int, 
-    token_account_in: Pubkey, 
-    token_account_out: Pubkey, 
+
+def make_cpmm_swap_instruction(
+    amount_in: int,
+    minimum_amount_out: int,
+    token_account_in: Pubkey,
+    token_account_out: Pubkey,
     accounts: CpmmPoolKeys,
     owner: Pubkey,
-    action: DIRECTION
+    action: DIRECTION,
 ) -> Instruction:
     try:
-        
+
         if action == DIRECTION.BUY:
             input_vault = accounts.token_0_vault
             output_vault = accounts.token_1_vault
@@ -349,10 +396,12 @@ def make_cpmm_swap_instruction(
             output_token_program = accounts.token_0_program
             input_token_mint = accounts.token_1_mint
             output_token_mint = accounts.token_0_mint
-        
+
         keys = [
-            AccountMeta(pubkey=owner, is_signer=True, is_writable=True), 
-            AccountMeta(pubkey=accounts.raydium_vault_auth_2, is_signer=False, is_writable=False),
+            AccountMeta(pubkey=owner, is_signer=True, is_writable=True),
+            AccountMeta(
+                pubkey=accounts.raydium_vault_auth_2, is_signer=False, is_writable=False
+            ),
             AccountMeta(pubkey=accounts.amm_config, is_signer=False, is_writable=False),
             AccountMeta(pubkey=accounts.pool_state, is_signer=False, is_writable=True),
             AccountMeta(pubkey=token_account_in, is_signer=False, is_writable=True),
@@ -360,209 +409,253 @@ def make_cpmm_swap_instruction(
             AccountMeta(pubkey=input_vault, is_signer=False, is_writable=True),
             AccountMeta(pubkey=output_vault, is_signer=False, is_writable=True),
             AccountMeta(pubkey=input_token_program, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=output_token_program, is_signer=False, is_writable=False),
+            AccountMeta(
+                pubkey=output_token_program, is_signer=False, is_writable=False
+            ),
             AccountMeta(pubkey=input_token_mint, is_signer=False, is_writable=False),
             AccountMeta(pubkey=output_token_mint, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=accounts.observation_key, is_signer=False, is_writable=True)
+            AccountMeta(
+                pubkey=accounts.observation_key, is_signer=False, is_writable=True
+            ),
         ]
-        
+
         data = bytearray()
         data.extend(bytes.fromhex("8fbe5adac41e33de"))
-        data.extend(struct.pack('<Q', amount_in))
-        data.extend(struct.pack('<Q', minimum_amount_out))
+        data.extend(struct.pack("<Q", amount_in))
+        data.extend(struct.pack("<Q", minimum_amount_out))
         swap_instruction = Instruction(RAYDIUM_CPMM, bytes(data), keys)
-        
+
         return swap_instruction
     except Exception as e:
         print(f"Error occurred: {e}")
         return None
 
-def make_clmm_swap_instruction( 
-    amount: int, 
-    token_account_in: Pubkey, 
-    token_account_out: Pubkey, 
+
+def make_clmm_swap_instruction(
+    amount: int,
+    token_account_in: Pubkey,
+    token_account_out: Pubkey,
     accounts: ClmmPoolKeys,
     owner: Pubkey,
-    action: DIRECTION
+    action: DIRECTION,
 ) -> Instruction:
     try:
-        
+
         if action == DIRECTION.BUY:
             input_vault = accounts.token_vault_0
             output_vault = accounts.token_vault_1
         elif action == DIRECTION.SELL:
             input_vault = accounts.token_vault_1
             output_vault = accounts.token_vault_0
-        
+
         keys = [
-            AccountMeta(pubkey=owner, is_signer=True, is_writable=True), 
+            AccountMeta(pubkey=owner, is_signer=True, is_writable=True),
             AccountMeta(pubkey=accounts.amm_config, is_signer=False, is_writable=False),
             AccountMeta(pubkey=accounts.pool_state, is_signer=False, is_writable=True),
             AccountMeta(pubkey=token_account_in, is_signer=False, is_writable=True),
             AccountMeta(pubkey=token_account_out, is_signer=False, is_writable=True),
             AccountMeta(pubkey=input_vault, is_signer=False, is_writable=True),
             AccountMeta(pubkey=output_vault, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.observation_key, is_signer=False, is_writable=True),
+            AccountMeta(
+                pubkey=accounts.observation_key, is_signer=False, is_writable=True
+            ),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
-            AccountMeta(pubkey=accounts.current_tick_array, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.bitmap_extension, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.prev_tick_array, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=accounts.additional_tick_array, is_signer=False, is_writable=True)
+            AccountMeta(
+                pubkey=accounts.current_tick_array, is_signer=False, is_writable=True
+            ),
+            AccountMeta(
+                pubkey=accounts.bitmap_extension, is_signer=False, is_writable=True
+            ),
+            AccountMeta(
+                pubkey=accounts.prev_tick_array, is_signer=False, is_writable=True
+            ),
+            AccountMeta(
+                pubkey=accounts.additional_tick_array, is_signer=False, is_writable=True
+            ),
         ]
-        
+
         data = bytearray()
         data.extend(bytes.fromhex("f8c69e91e17587c8"))
-        data.extend(struct.pack('<Q', amount))
-        data.extend(struct.pack('<Q', 0))
-        data.extend((0).to_bytes(16, byteorder='little'))
-        data.extend(struct.pack('<?', True))
+        data.extend(struct.pack("<Q", amount))
+        data.extend(struct.pack("<Q", 0))
+        data.extend((0).to_bytes(16, byteorder="little"))
+        data.extend(struct.pack("<?", True))
         swap_instruction = Instruction(RAYDIUM_CLMM, bytes(data), keys)
-        
+
         return swap_instruction
     except Exception as e:
         print(f"Error occurred: {e}")
         return None
+
 
 def get_amm_v4_reserves(pool_keys: AmmV4PoolKeys) -> tuple:
     try:
         quote_vault = pool_keys.quote_vault
         quote_decimal = pool_keys.quote_decimals
         quote_mint = pool_keys.quote_mint
-        
+
         base_vault = pool_keys.base_vault
         base_decimal = pool_keys.base_decimals
         base_mint = pool_keys.base_mint
-    
+
         balances_response = client.get_multiple_accounts_json_parsed(
-            [quote_vault, base_vault], 
-            Processed
+            [quote_vault, base_vault], Processed
         )
         balances = balances_response.value
 
         quote_account = balances[0]
         base_account = balances[1]
-        
-        quote_account_balance = quote_account.data.parsed['info']['tokenAmount']['uiAmount']
-        base_account_balance = base_account.data.parsed['info']['tokenAmount']['uiAmount']
-        
+
+        quote_account_balance = quote_account.data.parsed["info"]["tokenAmount"][
+            "uiAmount"
+        ]
+        base_account_balance = base_account.data.parsed["info"]["tokenAmount"][
+            "uiAmount"
+        ]
+
         if quote_account_balance is None or base_account_balance is None:
             print("Error: One of the account balances is None.")
             return None, None, None
-        
+
         if base_mint == WSOL:
-            base_reserve = quote_account_balance  
-            quote_reserve = base_account_balance  
-            token_decimal = quote_decimal 
+            base_reserve = quote_account_balance
+            quote_reserve = base_account_balance
+            token_decimal = quote_decimal
         else:
-            base_reserve = base_account_balance  
+            base_reserve = base_account_balance
             quote_reserve = quote_account_balance
             token_decimal = base_decimal
 
         print(f"Base Mint: {base_mint} | Quote Mint: {quote_mint}")
-        print(f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}")
+        print(
+            f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}"
+        )
         return base_reserve, quote_reserve, token_decimal
 
     except Exception as e:
         print(f"Error occurred: {e}")
         return None, None, None
 
+
 def get_cpmm_reserves(pool_keys: CpmmPoolKeys):
     quote_vault = pool_keys.token_0_vault
     quote_decimal = pool_keys.mint_0_decimals
     quote_mint = pool_keys.token_0_mint
-    
+
     base_vault = pool_keys.token_1_vault
     base_decimal = pool_keys.mint_1_decimals
     base_mint = pool_keys.token_1_mint
-    
-    protocol_fees_token_0 = pool_keys.protocol_fees_token_0 / (10 ** quote_decimal)
-    fund_fees_token_0 = pool_keys.fund_fees_token_0 / (10 ** quote_decimal)
-    protocol_fees_token_1 = pool_keys.protocol_fees_token_1 / (10 ** base_decimal)
-    fund_fees_token_1 = pool_keys.fund_fees_token_1 / (10 ** base_decimal)
-    
+
+    protocol_fees_token_0 = pool_keys.protocol_fees_token_0 / (10**quote_decimal)
+    fund_fees_token_0 = pool_keys.fund_fees_token_0 / (10**quote_decimal)
+    protocol_fees_token_1 = pool_keys.protocol_fees_token_1 / (10**base_decimal)
+    fund_fees_token_1 = pool_keys.fund_fees_token_1 / (10**base_decimal)
+
     balances_response = client.get_multiple_accounts_json_parsed(
-        [quote_vault, base_vault], 
-        Processed
+        [quote_vault, base_vault], Processed
     )
     balances = balances_response.value
 
     quote_account = balances[0]
     base_account = balances[1]
-    quote_account_balance = quote_account.data.parsed['info']['tokenAmount']['uiAmount']
-    base_account_balance = base_account.data.parsed['info']['tokenAmount']['uiAmount']
-    
+    quote_account_balance = quote_account.data.parsed["info"]["tokenAmount"]["uiAmount"]
+    base_account_balance = base_account.data.parsed["info"]["tokenAmount"]["uiAmount"]
+
     if quote_account_balance is None or base_account_balance is None:
         print("Error: One of the account balances is None.")
         return None, None, None
-    
+
     if base_mint == WSOL:
-        base_reserve = quote_account_balance - (protocol_fees_token_0 + fund_fees_token_0) 
-        quote_reserve = base_account_balance - (protocol_fees_token_1 + fund_fees_token_1)
+        base_reserve = quote_account_balance - (
+            protocol_fees_token_0 + fund_fees_token_0
+        )
+        quote_reserve = base_account_balance - (
+            protocol_fees_token_1 + fund_fees_token_1
+        )
         token_decimal = quote_decimal
     else:
-        base_reserve = base_account_balance - (protocol_fees_token_1 + fund_fees_token_1)
-        quote_reserve = quote_account_balance - (protocol_fees_token_0 + fund_fees_token_0)
+        base_reserve = base_account_balance - (
+            protocol_fees_token_1 + fund_fees_token_1
+        )
+        quote_reserve = quote_account_balance - (
+            protocol_fees_token_0 + fund_fees_token_0
+        )
         token_decimal = base_decimal
 
     print(f"Base Mint: {base_mint} | Quote Mint: {quote_mint}")
-    print(f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}")
+    print(
+        f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}"
+    )
     return base_reserve, quote_reserve, token_decimal
+
 
 def get_clmm_reserves(pool_keys: ClmmPoolKeys):
     quote_vault = pool_keys.token_vault_0
     quote_decimal = pool_keys.mint_decimals_0
     quote_mint = pool_keys.token_mint_0
-    
+
     base_vault = pool_keys.token_vault_1
     base_decimal = pool_keys.mint_decimals_1
     base_mint = pool_keys.token_mint_1
-    
-    protocol_fees_token_0 = pool_keys.protocol_fees_token_0 / (10 ** quote_decimal)
-    fund_fees_token_0 = pool_keys.fund_fees_token_0 / (10 ** quote_decimal)
-    protocol_fees_token_1 = pool_keys.protocol_fees_token_1 / (10 ** base_decimal)
-    fund_fees_token_1 = pool_keys.fund_fees_token_1 / (10 ** base_decimal)
-    
+
+    protocol_fees_token_0 = pool_keys.protocol_fees_token_0 / (10**quote_decimal)
+    fund_fees_token_0 = pool_keys.fund_fees_token_0 / (10**quote_decimal)
+    protocol_fees_token_1 = pool_keys.protocol_fees_token_1 / (10**base_decimal)
+    fund_fees_token_1 = pool_keys.fund_fees_token_1 / (10**base_decimal)
+
     balances_response = client.get_multiple_accounts_json_parsed(
-        [quote_vault, base_vault], 
-        Processed
+        [quote_vault, base_vault], Processed
     )
     balances = balances_response.value
 
     quote_account = balances[0]
     base_account = balances[1]
-    quote_account_balance = quote_account.data.parsed['info']['tokenAmount']['uiAmount']
-    base_account_balance = base_account.data.parsed['info']['tokenAmount']['uiAmount']
-    
+    quote_account_balance = quote_account.data.parsed["info"]["tokenAmount"]["uiAmount"]
+    base_account_balance = base_account.data.parsed["info"]["tokenAmount"]["uiAmount"]
+
     if quote_account_balance is None or base_account_balance is None:
         print("Error: One of the account balances is None.")
         return None, None, None
-    
+
     if base_mint == WSOL:
-        base_reserve = quote_account_balance - (protocol_fees_token_0 + fund_fees_token_0)
-        quote_reserve = base_account_balance - (protocol_fees_token_1 + fund_fees_token_1)
+        base_reserve = quote_account_balance - (
+            protocol_fees_token_0 + fund_fees_token_0
+        )
+        quote_reserve = base_account_balance - (
+            protocol_fees_token_1 + fund_fees_token_1
+        )
         token_decimal = quote_decimal
     else:
-        base_reserve = base_account_balance - (protocol_fees_token_1 + fund_fees_token_1)
-        quote_reserve = quote_account_balance - (protocol_fees_token_0 + fund_fees_token_0)
+        base_reserve = base_account_balance - (
+            protocol_fees_token_1 + fund_fees_token_1
+        )
+        quote_reserve = quote_account_balance - (
+            protocol_fees_token_0 + fund_fees_token_0
+        )
         token_decimal = base_decimal
 
     print(f"Base Mint: {base_mint} | Quote Mint: {quote_mint}")
-    print(f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}")
+    print(
+        f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}"
+    )
     return base_reserve, quote_reserve, token_decimal
 
+
 def fetch_pair_address_from_rpc(
-    program_id: Pubkey, 
-    token_mint: str, 
-    quote_offset: int, 
-    base_offset: int, 
-    data_length: int
+    program_id: Pubkey,
+    token_mint: str,
+    quote_offset: int,
+    base_offset: int,
+    data_length: int,
 ) -> list:
 
     def fetch_pair(base_mint: str, quote_mint: str) -> list:
         memcmp_filter_base = MemcmpOpts(offset=quote_offset, bytes=quote_mint)
         memcmp_filter_quote = MemcmpOpts(offset=base_offset, bytes=base_mint)
         try:
-            print(f"Fetching pair addresses for base_mint: {base_mint}, quote_mint: {quote_mint}")
+            print(
+                f"Fetching pair addresses for base_mint: {base_mint}, quote_mint: {quote_mint}"
+            )
             response = client.get_program_accounts(
                 program_id,
                 commitment=Processed,
@@ -586,6 +679,7 @@ def fetch_pair_address_from_rpc(
 
     return pair_addresses
 
+
 def get_amm_v4_pair_from_rpc(token_mint: str) -> list:
     return fetch_pair_address_from_rpc(
         program_id=RAYDIUM_AMM_V4,
@@ -595,6 +689,7 @@ def get_amm_v4_pair_from_rpc(token_mint: str) -> list:
         data_length=752,
     )
 
+
 def get_cpmm_pair_address_from_rpc(token_mint: str) -> list:
     return fetch_pair_address_from_rpc(
         program_id=RAYDIUM_CPMM,
@@ -603,6 +698,7 @@ def get_cpmm_pair_address_from_rpc(token_mint: str) -> list:
         base_offset=200,
         data_length=637,
     )
+
 
 def get_clmm_pair_address_from_rpc(token_mint: str) -> list:
     return fetch_pair_address_from_rpc(

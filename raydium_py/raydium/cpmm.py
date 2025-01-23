@@ -22,14 +22,15 @@ from spl.token.instructions import (
 )
 from utils.common_utils import confirm_txn, get_token_balance
 from utils.pool_utils import (
-    CpmmPoolKeys, 
-    DIRECTION, 
-    fetch_cpmm_pool_keys, 
-    make_cpmm_swap_instruction, 
-    get_cpmm_reserves
+    CpmmPoolKeys,
+    DIRECTION,
+    fetch_cpmm_pool_keys,
+    make_cpmm_swap_instruction,
+    get_cpmm_reserves,
 )
 from config import client, payer_keypair, UNIT_BUDGET, UNIT_PRICE
 from raydium.constants import ACCOUNT_LAYOUT_LEN, SOL_DECIMAL, TOKEN_PROGRAM_ID, WSOL
+
 
 def buy(pair_address: str, sol_in: float = 0.1, slippage: int = 1) -> bool:
     print(f"Starting buy transaction for pair address: {pair_address}")
@@ -158,6 +159,7 @@ def buy(pair_address: str, sol_in: float = 0.1, slippage: int = 1) -> bool:
 
     print("Transaction confirmed:", confirmed)
     return confirmed
+
 
 def sell(pair_address: str, percentage: int = 100, slippage: int = 1) -> bool:
     try:
@@ -298,16 +300,24 @@ def sell(pair_address: str, percentage: int = 100, slippage: int = 1) -> bool:
         print("Error occurred during transaction:", e)
         return False
 
+
 def sol_for_tokens(sol_amount, base_vault_balance, quote_vault_balance, swap_fee=0.25):
     effective_sol_used = sol_amount - (sol_amount * (swap_fee / 100))
     constant_product = base_vault_balance * quote_vault_balance
-    updated_base_vault_balance = constant_product / (quote_vault_balance + effective_sol_used)
+    updated_base_vault_balance = constant_product / (
+        quote_vault_balance + effective_sol_used
+    )
     tokens_received = base_vault_balance - updated_base_vault_balance
     return round(tokens_received, 9)
 
-def tokens_for_sol(token_amount, base_vault_balance, quote_vault_balance, swap_fee=0.25):
+
+def tokens_for_sol(
+    token_amount, base_vault_balance, quote_vault_balance, swap_fee=0.25
+):
     effective_tokens_sold = token_amount * (1 - (swap_fee / 100))
     constant_product = base_vault_balance * quote_vault_balance
-    updated_quote_vault_balance = constant_product / (base_vault_balance + effective_tokens_sold)
+    updated_quote_vault_balance = constant_product / (
+        base_vault_balance + effective_tokens_sold
+    )
     sol_received = quote_vault_balance - updated_quote_vault_balance
     return round(sol_received, 9)

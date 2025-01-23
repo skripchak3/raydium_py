@@ -22,13 +22,14 @@ from spl.token.instructions import (
 )
 from utils.common_utils import confirm_txn, get_token_balance
 from utils.pool_utils import (
-    ClmmPoolKeys, 
-    DIRECTION, 
-    fetch_clmm_pool_keys, 
-    make_clmm_swap_instruction
+    ClmmPoolKeys,
+    DIRECTION,
+    fetch_clmm_pool_keys,
+    make_clmm_swap_instruction,
 )
 from config import client, payer_keypair, UNIT_BUDGET, UNIT_PRICE
 from raydium.constants import ACCOUNT_LAYOUT_LEN, SOL_DECIMAL, TOKEN_PROGRAM_ID, WSOL
+
 
 def buy(pair_address: str, sol_in: float = 0.1) -> bool:
     print(f"Starting buy transaction for pair address: {pair_address}")
@@ -47,18 +48,27 @@ def buy(pair_address: str, sol_in: float = 0.1) -> bool:
 
     print("Calculating transaction amounts...")
     amount = int(sol_in * SOL_DECIMAL)
-    tokens_out = sol_for_tokens(sol_in, pool_keys.sqrt_price_x64, pool_keys.mint_decimals_0, pool_keys.mint_decimals_1)
+    tokens_out = sol_for_tokens(
+        sol_in,
+        pool_keys.sqrt_price_x64,
+        pool_keys.mint_decimals_0,
+        pool_keys.mint_decimals_1,
+    )
     print(f"Amount In: {sol_in} | Estimated Amount Out: {tokens_out}")
 
     print("Checking for existing token account...")
-    token_account_check = client.get_token_accounts_by_owner(payer_keypair.pubkey(), TokenAccountOpts(mint), Processed)
+    token_account_check = client.get_token_accounts_by_owner(
+        payer_keypair.pubkey(), TokenAccountOpts(mint), Processed
+    )
     if token_account_check.value:
         token_account = token_account_check.value[0].pubkey
         token_account_instruction = None
         print("Token account found.")
     else:
         token_account = get_associated_token_address(payer_keypair.pubkey(), mint)
-        token_account_instruction = create_associated_token_account(payer_keypair.pubkey(), payer_keypair.pubkey(), mint)
+        token_account_instruction = create_associated_token_account(
+            payer_keypair.pubkey(), payer_keypair.pubkey(), mint
+        )
         print("No existing token account found; creating associated token account.")
 
     print("Generating seed for WSOL account...")
@@ -144,6 +154,7 @@ def buy(pair_address: str, sol_in: float = 0.1) -> bool:
     print("Transaction confirmed:", confirmed)
     return confirmed
 
+
 def sell(pair_address: str, percentage: int = 100) -> bool:
     try:
         print("Fetching pool keys...")
@@ -170,13 +181,20 @@ def sell(pair_address: str, percentage: int = 100) -> bool:
             return False
 
         token_balance = token_balance * (percentage / 100)
-        print(f"Selling {percentage}% of the token balance, adjusted balance: {token_balance}")
+        print(
+            f"Selling {percentage}% of the token balance, adjusted balance: {token_balance}"
+        )
 
         print("Calculating transaction amounts...")
-        
-        sol_out = tokens_for_sol(token_balance, pool_keys.sqrt_price_x64, pool_keys.mint_decimals_0, pool_keys.mint_decimals_1)
+
+        sol_out = tokens_for_sol(
+            token_balance,
+            pool_keys.sqrt_price_x64,
+            pool_keys.mint_decimals_0,
+            pool_keys.mint_decimals_1,
+        )
         print(f"Amount In: {token_balance} | Estimated Amount Out: {sol_out}")
-        
+
         amount = int(token_balance * 10**token_decimal)
         token_account = get_associated_token_address(payer_keypair.pubkey(), mint)
 
@@ -274,18 +292,31 @@ def sell(pair_address: str, percentage: int = 100) -> bool:
         print("Error occurred during transaction:", e)
         return False
 
-def sqrt_price_x64_to_price(sqrt_price_x64: int, mint_decimals_0: int, mint_decimals_1: int) -> float:
-    Q64 = 2 ** 64
+
+def sqrt_price_x64_to_price(
+    sqrt_price_x64: int, mint_decimals_0: int, mint_decimals_1: int
+) -> float:
+    Q64 = 2**64
     sqrt_price = sqrt_price_x64 / Q64
-    price = (sqrt_price ** 2) * (10 ** (mint_decimals_0 - mint_decimals_1))
+    price = (sqrt_price**2) * (10 ** (mint_decimals_0 - mint_decimals_1))
     return price
 
-def sol_for_tokens(sol_in: float, sqrt_price_x64: int, mint_decimals_0: int, mint_decimals_1: int) -> float:
-    token_price = 1 / sqrt_price_x64_to_price(sqrt_price_x64, mint_decimals_0, mint_decimals_1)
+
+def sol_for_tokens(
+    sol_in: float, sqrt_price_x64: int, mint_decimals_0: int, mint_decimals_1: int
+) -> float:
+    token_price = 1 / sqrt_price_x64_to_price(
+        sqrt_price_x64, mint_decimals_0, mint_decimals_1
+    )
     tokens_out = sol_in / token_price
     return round(tokens_out, 9)
 
-def tokens_for_sol(tokens_in: float, sqrt_price_x64: int, mint_decimals_0: int, mint_decimals_1: int) -> float:
-    token_price = 1 / sqrt_price_x64_to_price(sqrt_price_x64, mint_decimals_0, mint_decimals_1)
+
+def tokens_for_sol(
+    tokens_in: float, sqrt_price_x64: int, mint_decimals_0: int, mint_decimals_1: int
+) -> float:
+    token_price = 1 / sqrt_price_x64_to_price(
+        sqrt_price_x64, mint_decimals_0, mint_decimals_1
+    )
     sol_out = tokens_in * token_price
     return round(sol_out, 9)

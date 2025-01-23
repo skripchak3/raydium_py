@@ -1,4 +1,16 @@
-from construct import Struct, Int64ul, Int8ul, Bytes, Array, Padding, Int8ul, Flag, Int16ul, GreedyRange, Adapter
+from construct import (
+    Struct,
+    Int64ul,
+    Int8ul,
+    Bytes,
+    Array,
+    Padding,
+    Int8ul,
+    Flag,
+    Int16ul,
+    GreedyRange,
+    Adapter,
+)
 
 CPMM_POOL_STATE_LAYOUT = Struct(
     Padding(8),
@@ -24,7 +36,7 @@ CPMM_POOL_STATE_LAYOUT = Struct(
     "fund_fees_token_1" / Int64ul,
     "open_time" / Int64ul,
     "padding" / Array(32, Int64ul),
-    )
+)
 
 AMM_CONFIG_LAYOUT = Struct(
     Padding(8),
@@ -40,6 +52,7 @@ AMM_CONFIG_LAYOUT = Struct(
     "padding" / Array(16, Int64ul),
 )
 
+
 class UInt128Adapter(Adapter):
     def _decode(self, obj, context, path):
         return (obj.high << 64) | obj.low
@@ -49,23 +62,20 @@ class UInt128Adapter(Adapter):
         low = obj & ((1 << 64) - 1)
         return dict(high=high, low=low)
 
-UInt128ul = UInt128Adapter(Struct(
-    "low" / Int64ul,
-    "high" / Int64ul
-))
+
+UInt128ul = UInt128Adapter(Struct("low" / Int64ul, "high" / Int64ul))
 
 OBSERVATION = Struct(
     "block_timestamp" / Int64ul,
-    "cumulative_token_0_price_x32" / UInt128ul ,
-    "cumulative_token_1_price_x32" / UInt128ul ,
+    "cumulative_token_0_price_x32" / UInt128ul,
+    "cumulative_token_1_price_x32" / UInt128ul,
 )
 
 OBSERVATION_STATE = Struct(
     Padding(8),
     "initialized" / Flag,
     "observationIndex" / Int16ul,
-    "poolId" / Bytes(32),  
+    "poolId" / Bytes(32),
     "observations" / GreedyRange(OBSERVATION),
-    "padding" / GreedyRange(Int64ul), 
-  
+    "padding" / GreedyRange(Int64ul),
 )
