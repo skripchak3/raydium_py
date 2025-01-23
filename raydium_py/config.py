@@ -1,14 +1,25 @@
-import os
+from os import path, getenv
 
+from dotenv import load_dotenv
 from solana.rpc.api import Client
 from solders.keypair import Keypair  # type: ignore
+
+env_path = path.join(path.dirname(path.dirname(__file__)), ".env")
+print(f'Load PRIVATE_KEY and RPC_API_KEY from {env_path}')
+
+load_dotenv(
+    dotenv_path=env_path,
+    override=True,
+    verbose=True,
+    encoding="utf-8",
+)
 
 # gas config
 UNIT_BUDGET = 150_000
 UNIT_PRICE = 1_000_000
 
 # private key
-payer_keypair = Keypair.from_base58_string(os.getenv("PRIVATE_KEY"))
+payer_keypair = Keypair.from_base58_string(getenv("PRIVATE_KEY"))
 
 # Heluis API for speed, can be replaced by default Solana endpoint
-client = Client(f'https://mainnet.helius-rpc.com/?api-key={os.getenv("RPC_API_KEY")}')
+client = Client(f'https://mainnet.helius-rpc.com/?api-key={getenv("RPC_API_KEY")}')
