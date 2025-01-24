@@ -4,7 +4,7 @@ from solana.rpc.commitment import Confirmed, Processed
 from solana.rpc.types import TokenAccountOpts
 from solders.signature import Signature  # type: ignore
 from solders.pubkey import Pubkey  # type: ignore
-from config import client, payer_keypair
+from raydium_py.config import client, payer_keypair
 
 
 def get_token_balance(mint_str: str) -> float | None:
@@ -26,7 +26,7 @@ def get_token_balance(mint_str: str) -> float | None:
 
 
 def confirm_txn(
-    txn_sig: Signature, max_retries: int = 20, retry_interval: int = 3
+    txn_sig: Signature, max_retries: int = 6, retry_interval: int = 3
 ) -> bool:
     retries = 1
 

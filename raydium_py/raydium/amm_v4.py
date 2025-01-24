@@ -20,15 +20,20 @@ from spl.token.instructions import (
     get_associated_token_address,
     initialize_account,
 )
-from utils.common_utils import confirm_txn, get_token_balance
-from utils.pool_utils import (
+from raydium_py.utils.common_utils import confirm_txn, get_token_balance
+from raydium_py.utils.pool_utils import (
     AmmV4PoolKeys,
     fetch_amm_v4_pool_keys,
     get_amm_v4_reserves,
     make_amm_v4_swap_instruction,
 )
-from config import client, payer_keypair, UNIT_BUDGET, UNIT_PRICE
-from raydium.constants import ACCOUNT_LAYOUT_LEN, SOL_DECIMAL, TOKEN_PROGRAM_ID, WSOL
+from raydium_py.config import client, payer_keypair, UNIT_BUDGET, UNIT_PRICE
+from raydium_py.raydium.constants import (
+    ACCOUNT_LAYOUT_LEN,
+    SOL_DECIMAL,
+    TOKEN_PROGRAM_ID,
+    WSOL,
+)
 
 
 def buy(pair_address: str, sol_in: float = 0.01, slippage: int = 5) -> bool:
