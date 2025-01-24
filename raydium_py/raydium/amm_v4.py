@@ -36,12 +36,13 @@ from raydium_py.raydium.constants import (
 )
 
 
-def buy(pair_address: str, sol_in: float = 0.01, slippage: int = 5) -> bool:
+def buy(
+    sol_in: float = 0.01,
+    slippage: int = 5,
+    pool_keys: Optional[AmmV4PoolKeys] = None,
+) -> bool:
     try:
-        print(f"Starting buy transaction for pair address: {pair_address}")
-
         print("Fetching pool keys...")
-        pool_keys: Optional[AmmV4PoolKeys] = fetch_amm_v4_pool_keys(pair_address)
         if pool_keys is None:
             print("No pool keys found...")
             return False
@@ -166,15 +167,17 @@ def buy(pair_address: str, sol_in: float = 0.01, slippage: int = 5) -> bool:
         return False
 
 
-def sell(pair_address: str, percentage: int = 100, slippage: int = 5) -> bool:
+def sell(
+    percentage: int = 100,
+    slippage: int = 5,
+    pool_keys: Optional[AmmV4PoolKeys] = None,
+) -> bool:
     try:
-        print(f"Starting sell transaction for pair address: {pair_address}")
         if not (1 <= percentage <= 100):
             print("Percentage must be between 1 and 100.")
             return False
 
         print("Fetching pool keys...")
-        pool_keys: Optional[AmmV4PoolKeys] = fetch_amm_v4_pool_keys(pair_address)
         if pool_keys is None:
             print("No pool keys found...")
             return False

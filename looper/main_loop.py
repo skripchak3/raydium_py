@@ -1,12 +1,12 @@
 import asyncio
 import json
-from asyncio import sleep
 from operator import itemgetter
 from os import getenv
+from pprint import pprint
 
+import requests
 import uvloop
 from dotenv import load_dotenv
-from helius import TransactionsAPI
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.websocket_api import connect
@@ -15,162 +15,330 @@ from solders.rpc.responses import (
     SubscriptionResult,
     LogsNotification,
 )
+from typing_extensions import Optional
 
 from raydium_py.config import payer_keypair
 from raydium_py.raydium.amm_v4 import buy, sell
 from raydium_py.raydium.constants import RAYDIUM_AMM_V4
-from raydium_py.utils.pool_utils import fetch_amm_v4_pool_keys, get_amm_v4_reserves
+from raydium_py.utils.pool_utils import (
+    fetch_amm_v4_pool_keys,
+    get_amm_v4_reserves,
+    AmmV4PoolKeys,
+)
 
 load_dotenv()
 
-MIN = 200
-PROFIT = 10
+# just emulate real buy
+DRY_RUN = False
+
+# you have a force
+FORCE = False
+
+MIN = 100
+PROFIT = 5
 BUY_SLIPPAGE = 50
-SELL_SLIPPAGE = 20
+SELL_SLIPPAGE = 25
 API_KEY = getenv("RPC_API_KEY")
 HTTP_URL = f"https://mainnet.helius-rpc.com/?api-key={API_KEY}"
 WS_URL = f"wss://mainnet.helius-rpc.com/?api-key={API_KEY}"
 PAIR_CREATED_EVENT = "initialize2"
 
 client = AsyncClient(HTTP_URL)
-helius = TransactionsAPI(API_KEY)
 
 
-async def watcher(
-    pair_address: str,
-    token_address: str,
-    balance: float,
-    buy_amount_in_sol: float = 0.05,
-    min_amount_in_sol: int = 200,
-    profit_threshold: int = 7,
-    buy_slippage: int = 50,
-    sell_slippage: int = 20,
-):
-    pool_keys = fetch_amm_v4_pool_keys(pair_address)
+class RaydiumV4Bot:
+    def __init__(self):
+        self.client = AsyncClient(HTTP_URL)
+        self.payer_keypair = payer_keypair
+        self.min_amount_in_sol = 200
+        self.profit_threshold = 7
+        self.buy_slippage = 50
+        self.sell_slippage = 20
+        self.buy_amount_in_sol = 0.01
+        self.dry_run = DRY_RUN
+        self.check = True
 
-    initial_price = None
-    bought = False
+    async def loop(self):
+        while True:
+            if self.dry_run:
+                print("DRY RUN MODE!!!")
+            commitment = Confirmed
 
-    while 1:
-        (quote_amount, base_amount, _) = get_amm_v4_reserves(pool_keys)
-        current_price = base_amount / quote_amount
+            # TODO not always magic constants works
 
-        if not initial_price:
-            initial_price = current_price
+            token_address_idx = 18
+            pair_address_idx = 2
+
+            # balance = await client.get_balance(payer_keypair.pubkey(), commitment=Confirmed)
+            # balance = balance.value / 10 ** 9
             print(
-                f"Token /{token_address}/  [{round(base_amount, 2)} SOL]  {{{current_price}}}  (-%)"
-            )
-            token_to_buy = base_amount >= min_amount_in_sol
-            if token_to_buy and balance > buy_amount_in_sol:
-                print(f"Buying 0.05 SOL")
-                bought = buy(
-                    pair_address, sol_in=buy_amount_in_sol, slippage=buy_slippage
-                )
-                if not bought:
-                    print("Failed to buy")
-                    break
-            else:
-                break
-
-        else:
-            profit = (current_price / initial_price) * 100 - 100
-            print(
-                f"Token /{token_address}/  [{round(base_amount, 2)} SOL]  {{{current_price}}}  ({round(profit, 1)}%)"
-            )
-            if profit >= profit_threshold and bought:
-                print(f"Selling 0.05 SOL")
-                sold = sell(pair_address, slippage=sell_slippage)
-                if sold:
-                    break
-
-        await sleep(0.5)
-
-
-# This function listens for new pool creation
-async def main():
-    commitment = Confirmed
-    token_address_idx = 18
-    pair_address_idx = 2
-
-    balance = await client.get_balance(payer_keypair.pubkey(), commitment=Confirmed)
-    balance = balance.value / 10**9
-    print(
-        f"Starting with balance: {balance} SOL with filter for more than {MIN} SOL and profit target {PROFIT}%"
-    )
-
-    try:
-        async with connect(WS_URL) as ws:
-            # subscribe to all events from Raydium V4
-            await ws.logs_subscribe(
-                filter_=RpcTransactionLogsFilterMentions(RAYDIUM_AMM_V4),
-                commitment=commitment,
+                f"Starting with filter for more than {MIN} SOL and profit target {PROFIT}%"
             )
 
-            # read first message with subscription id
-            match await ws.recv():
-                case [subscription] if isinstance(subscription, SubscriptionResult):
-                    # print("Subscription response", subscription)
-                    ...
+            try:
+                async with connect(WS_URL) as ws:
+                    # subscribe to all events from Raydium V4
+                    await ws.logs_subscribe(
+                        filter_=RpcTransactionLogsFilterMentions(RAYDIUM_AMM_V4),
+                        commitment=commitment,
+                    )
 
-            # filter only pair created events
-            async for message in ws:
-                match message:
-                    case [message] if isinstance(message, LogsNotification):
-                        if any(
-                            [PAIR_CREATED_EVENT in log for log in message.result.value.logs]
+                    # read first message with subscription id
+                    match await ws.recv():
+                        case [subscription] if isinstance(
+                            subscription, SubscriptionResult
                         ):
-                            tx_hash = message.result.value.signature
-                            print(
-                                f"""Pair created:
-                            https://solscan.io/tx/{tx_hash}"""
-                            )
-                            tx = json.loads(
-                                (
-                                    await client.get_transaction(
-                                        tx_hash,
-                                        commitment=commitment,
-                                        encoding="jsonParsed",
-                                        max_supported_transaction_version=1,
+                            # print("Subscription response", subscription)
+                            ...
+
+                    # filter only pair created events
+                    async for message in ws:
+                        match message:
+                            case [message] if isinstance(message, LogsNotification):
+                                if any(
+                                    [
+                                        PAIR_CREATED_EVENT in log
+                                        for log in message.result.value.logs
+                                    ]
+                                ):
+                                    tx_hash = message.result.value.signature
+                                    print(
+                                        f"""Pair created:
+                                    https://solscan.io/tx/{tx_hash}"""
                                     )
-                                ).to_json()
-                            )
-                            accounts = tx["result"]["transaction"]["message"]["accountKeys"]
-                            accounts = list(map(itemgetter("pubkey"), accounts))
-                            token_address = accounts[token_address_idx]
-                            pair_address = accounts[pair_address_idx]
-                            print(
-                                f"""Token address:
-                            https://solscan.io/token/{token_address}"""
-                            )
-                            print(
-                                f"""Pair address:
-                            https://photon-sol.tinyastro.io/en/lp/{pair_address}
-                            https://dexscreener.com/solana/{pair_address}"""
-                            )
-                            print(
-                                f"""Me:
-                            {payer_keypair.pubkey()}
-                            https://solscan.io/account/{payer_keypair.pubkey()}"""
-                            )
-                            balance = await client.get_balance(
-                                payer_keypair.pubkey(), commitment=Confirmed
-                            )
-                            balance = balance.value / 10**9
-                            await watcher(
-                                pair_address,
-                                token_address,
-                                balance,
-                                min_amount_in_sol=MIN,
-                                profit_threshold=PROFIT,
-                                buy_slippage=BUY_SLIPPAGE,
-                                sell_slippage=SELL_SLIPPAGE,
-                            )
-                            print()
-                            print("=" * 120)
-                            print("NEXT")
-                            print("=" * 120)
-    except:
-        print('Restarting in 0 seconds...')
+                                    tx = json.loads(
+                                        (
+                                            await client.get_transaction(
+                                                tx_hash,
+                                                commitment=commitment,
+                                                encoding="jsonParsed",
+                                                max_supported_transaction_version=1,
+                                            )
+                                        ).to_json()
+                                    )
+                                    accounts = tx["result"]["transaction"]["message"][
+                                        "accountKeys"
+                                    ]
+                                    accounts = list(map(itemgetter("pubkey"), accounts))
+                                    token_address = accounts[token_address_idx]
+                                    pair_address = accounts[pair_address_idx]
+                                    print(
+                                        f"""Token address:
+                                    https://solscan.io/token/{token_address}"""
+                                    )
+                                    print(
+                                        f"""Pair address:
+                                    https://photon-sol.tinyastro.io/en/lp/{pair_address}
+                                    https://dexscreener.com/solana/{pair_address}"""
+                                    )
+                                    print(
+                                        f"""Me:
+                                    {payer_keypair.pubkey()}
+                                    https://solscan.io/account/{payer_keypair.pubkey()}"""
+                                    )
+                                    print()
+                                    await self.watch(
+                                        pair_address=pair_address,
+                                        token_address=token_address,
+                                        buy_amount_in_sol=0.01,
+                                        min_amount_in_sol=MIN,
+                                        profit_threshold=PROFIT,
+                                        buy_slippage=BUY_SLIPPAGE,
+                                        sell_slippage=SELL_SLIPPAGE,
+                                    )
+                                    break
+                                    print()
+                                    print("=" * 120)
+                                    print("NEXT")
+                                    print("=" * 120)
+            except:
+                print("Restarting in 0 seconds...")
+
+    async def watch(
+        self,
+        /,
+        *,
+        pair_address: str,
+        token_address: str,
+        buy_amount_in_sol: float = 0.05,
+        min_amount_in_sol: int = 200,
+        profit_threshold: int = 7,
+        buy_slippage: int = 50,
+        sell_slippage: int = 20,
+    ):
+        pool_keys = fetch_amm_v4_pool_keys(pair_address)
+
+        init_price = 0
+
+        if pool_keys:
+            # check
+
+            current_price, base_amount = await self.current_price_and_amount_in_sol(pool_keys)
+            init_price = current_price
+            print(f"Token /{token_address}/  [{base_amount:4.2f} SOL]  {{{current_price:.18f}}}  (0.0%)")
+
+            if self.check and base_amount > min_amount_in_sol:
+                (freeze_authority, mint_authority, lp_burned) = await self.rug_checker(
+                    token_address
+                )
+                print("LP Burned: ", lp_burned)
+
+                if not freeze_authority:
+                    print(f"Token {token_address} has freeze authority!")
+                    if FORCE:
+                        print("FORCE mode is on. Proceeding...")
+                    else:
+                        return
+
+                if not mint_authority:
+                    print(f"Token {token_address} has mint authority!")
+                    if FORCE:
+                        print("FORCE mode is on. Proceeding...")
+                    else:
+                        return
+
+                if not lp_burned:
+                    print(
+                        f"Liquidity Provider Tokens {token_address} has not been burned!"
+                    )
+                    if FORCE:
+                        print("FORCE mode is on. Proceeding...")
+                    else:
+                        return
+
+        swap_sol_for_token = True
+        buy_price = 0
+
+        while pool_keys:
+            current_price, base_amount = await self.current_price_and_amount_in_sol(
+                pool_keys
+            )
+            if not current_price or not base_amount:
+                continue
+
+            init_profit = round((current_price / init_price) * 100 - 100, 1)
+            if swap_sol_for_token:
+                # buy tokens for SOL
+                print(
+                    f"Token /{token_address}/  [{base_amount:4.2f} SOL]  {{{current_price:.18f}}}  ({init_profit}%)"
+                )
+
+                is_bought = await self.try_buy(
+                    pool_keys,
+                    base_amount,
+                    buy_amount_in_sol,
+                    buy_slippage,
+                    min_amount_in_sol,
+                )
+                if is_bought:
+                    print(">>> BOUGHT")
+                    buy_price = current_price
+                    print(
+                        f"Swapped {buy_amount_in_sol} SOL for {token_address} at price {buy_price} SOL/X"
+                    )
+                    swap_sol_for_token = False
+            else:
+                # sell tokens for SOL
+                profit = round((current_price / buy_price) * 100 - 100, 1)
+                print(
+                    f"Token /{token_address}/  [{base_amount:4.2f} SOL]  {{{current_price:.18f}}}  ({profit}%)"
+                )
+
+                is_sold = await self.try_sell(
+                    pool_keys, profit, sell_slippage, profit_threshold
+                )
+                if is_sold:
+                    print("<<< SOLD")
+                    sell_price = current_price
+                    buy_price = 0
+                    print(
+                        f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price} SOL/X!"
+                    )
+                    break
+
+            await asyncio.sleep(0.5)
+
+    async def rug_checker(self, token_address: str):
+        n = 4
+        while n > 0:
+            print(f"Checking {token_address}...")
+            check = requests.get(
+                f"https://api.rugcheck.xyz/v1/tokens/{token_address}/report"
+            )
+            print(f"API response: {check.status_code}")
+            if check.status_code == 200:
+                report = check.json()
+                freeze_authority = report["freezeAuthority"] is None
+
+                mint_authority = report["mintAuthority"] is None
+                lp_burned = report["markets"][0]["lp"]["lpUnlocked"] == 0
+                pprint(report["markets"][0]["lp"])
+                return freeze_authority, mint_authority, lp_burned
+            else:
+                print(f"API returned error: {check.status_code}")
+
+            await asyncio.sleep(1)
+            n -= 1
+
+    async def current_price_and_amount_in_sol(
+        self,
+        pool_keys: Optional[AmmV4PoolKeys],
+    ) -> tuple[Optional[float], Optional[float]]:
+        (quote_amount, base_amount, _) = get_amm_v4_reserves(pool_keys)
+
+        if not (quote_amount and base_amount):
+            return None, None
+
+        current_price = base_amount / quote_amount
+        return current_price, round(base_amount, 2)
+
+    async def try_buy(
+        self,
+        pool_keys: AmmV4PoolKeys,
+        base_amount: float,
+        sol_in: float,
+        slippage: int = 50,
+        min_amount_in_sol: int = 200,
+    ):
+        try:
+            if base_amount >= min_amount_in_sol:
+                print(
+                    f"Current amount in SOL: {base_amount} SOL above the limit of {min_amount_in_sol} SOL"
+                )
+                if DRY_RUN:
+                    print("DRY RUN MODE! Not really buying...")
+                    return True
+
+                print(f">>> TRY BUY {sol_in} SOL")
+                return bool(buy(sol_in=sol_in, slippage=slippage, pool_keys=pool_keys))
+            else:
+                return False
+        except:
+            return False
+
+    async def try_sell(
+        self,
+        pool_keys: AmmV4PoolKeys,
+        profit: float,
+        slippage: int = 50,
+        take_profit: int = 10,
+    ):
+        try:
+            if profit >= take_profit:
+                if DRY_RUN:
+                    return True
+
+                print(f"<<< TRY SELL X.Y SOL")
+                return bool(sell(slippage=slippage, pool_keys=pool_keys))
+            else:
+                return False
+        except:
+            return False
+
+
+async def main():
+    bot = RaydiumV4Bot()
+    await bot.loop()
 
 
 if __name__ == "__main__":
