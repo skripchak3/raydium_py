@@ -8,11 +8,11 @@ from solana.rpc.types import MemcmpOpts
 from solders.instruction import AccountMeta, Instruction  # type: ignore
 from solders.pubkey import Pubkey  # type: ignore
 
-from config import client
-from layouts.amm_v4 import LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3
-from layouts.clmm import CLMM_POOL_STATE_LAYOUT
-from layouts.cpmm import CPMM_POOL_STATE_LAYOUT
-from raydium.constants import (
+from raydium_py.config import client
+from raydium_py.layouts.amm_v4 import LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3
+from raydium_py.layouts.clmm import CLMM_POOL_STATE_LAYOUT
+from raydium_py.layouts.cpmm import CPMM_POOL_STATE_LAYOUT
+from raydium_py.raydium.constants import (
     WSOL,
     TOKEN_PROGRAM_ID,
     RAYDIUM_AMM_V4,
@@ -526,10 +526,10 @@ def get_amm_v4_reserves(pool_keys: AmmV4PoolKeys) -> tuple:
             quote_reserve = quote_account_balance
             token_decimal = base_decimal
 
-        print(f"Base Mint: {base_mint} | Quote Mint: {quote_mint}")
-        print(
-            f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}"
-        )
+        # print(f"Base Mint: {base_mint} | Quote Mint: {quote_mint}")
+        # print(
+        #     f"Base Reserve: {base_reserve} | Quote Reserve: {quote_reserve} | Token Decimal: {token_decimal}"
+        # )
         return base_reserve, quote_reserve, token_decimal
 
     except Exception as e:

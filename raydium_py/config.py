@@ -5,8 +5,6 @@ from solana.rpc.api import Client
 from solders.keypair import Keypair  # type: ignore
 
 env_path = path.join(path.dirname(path.dirname(__file__)), ".env")
-print(f"Load PRIVATE_KEY and RPC_API_KEY from {env_path}")
-
 load_dotenv(
     dotenv_path=env_path,
     override=True,

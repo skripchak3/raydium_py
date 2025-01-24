@@ -15,6 +15,7 @@ from solders.rpc.responses import (
     LogsNotification,
 )
 
+from looper.watcher import is_buy, watcher
 from raydium_py.raydium.constants import RAYDIUM_AMM_V4
 
 load_dotenv()
@@ -72,15 +73,18 @@ async def main():
                         )
                         accounts = tx["result"]["transaction"]["message"]["accountKeys"]
                         accounts = list(map(itemgetter("pubkey"), accounts))
+                        token_address = accounts[token_address_idx]
+                        pair_address = accounts[pair_address_idx]
                         print(
                             f"""Token address:
-                        https://solscan.io/token/{accounts[token_address_idx]}"""
+                        https://solscan.io/token/{token_address}"""
                         )
                         print(
                             f"""Pair address:
-                        https://photon-sol.tinyastro.io/en/lp/{accounts[pair_address_idx]}
-                        https://dexscreener.com/solana/{accounts[pair_address_idx]}"""
+                        https://photon-sol.tinyastro.io/en/lp/{pair_address}
+                        https://dexscreener.com/solana/{pair_address}"""
                         )
+                        await watcher(pair_address)
                         break
 
 
