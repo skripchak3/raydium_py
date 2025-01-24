@@ -153,7 +153,7 @@ def buy(pair_address: str, sol_in: float = 0.01, slippage: int = 5) -> bool:
             txn=VersionedTransaction(compiled_message, [payer_keypair]),
             opts=TxOpts(skip_preflight=True),
         ).value
-        print("Transaction Signature:", txn_sig)
+        print(f"Transaction Signature: https://solscan.io/tx/{txn_sig}")
 
         print("Confirming transaction...")
         confirmed = confirm_txn(txn_sig)
@@ -292,7 +292,7 @@ def sell(pair_address: str, percentage: int = 100, slippage: int = 5) -> bool:
             txn=VersionedTransaction(compiled_message, [payer_keypair]),
             opts=TxOpts(skip_preflight=True),
         ).value
-        print("Transaction Signature:", txn_sig)
+        print(f"Transaction Signature: https://solscan.io/tx/{txn_sig}")
 
         print("Confirming transaction...")
         confirmed = confirm_txn(txn_sig)
