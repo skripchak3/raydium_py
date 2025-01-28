@@ -13,8 +13,8 @@ load_dotenv(
 )
 
 # gas config
-UNIT_BUDGET = 150_000
-UNIT_PRICE = 1_000_000
+UNIT_BUDGET = 100_000
+UNIT_PRICE = 500_000
 
 # private key
 payer_keypair = Keypair.from_base58_string(getenv("PRIVATE_KEY"))

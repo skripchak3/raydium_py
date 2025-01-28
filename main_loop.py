@@ -1,8 +1,11 @@
+#!/usr/bin/env python
+
 import asyncio
 import json
 from operator import itemgetter
 from os import getenv
 from pprint import pprint
+from time import sleep
 
 import requests
 import uvloop
@@ -35,9 +38,12 @@ DRY_RUN = False
 FORCE = False
 
 MIN = 100
-PROFIT = 5
+PROFIT = 2.9
+AMOUNT = 0.02
+
 BUY_SLIPPAGE = 50
 SELL_SLIPPAGE = 25
+
 API_KEY = getenv("RPC_API_KEY")
 HTTP_URL = f"https://mainnet.helius-rpc.com/?api-key={API_KEY}"
 WS_URL = f"wss://mainnet.helius-rpc.com/?api-key={API_KEY}"
@@ -56,9 +62,10 @@ class RaydiumV4Bot:
         self.sell_slippage = 20
         self.buy_amount_in_sol = 0.01
         self.dry_run = DRY_RUN
-        self.check = True
+        self.check = not True
 
     async def loop(self):
+        i = 0
         while True:
             if self.dry_run:
                 print("DRY RUN MODE!!!")
@@ -66,8 +73,13 @@ class RaydiumV4Bot:
 
             # TODO not always magic constants works
 
+            # odd
             token_address_idx = 18
             pair_address_idx = 2
+
+            # even
+            # token_address_idx = 19
+            # pair_address_idx = 3
 
             # balance = await client.get_balance(payer_keypair.pubkey(), commitment=Confirmed)
             # balance = balance.value / 10 ** 9
@@ -116,10 +128,14 @@ class RaydiumV4Bot:
                                             )
                                         ).to_json()
                                     )
+                                    # print('TX')
+                                    # pprint(tx)
                                     accounts = tx["result"]["transaction"]["message"][
                                         "accountKeys"
                                     ]
                                     accounts = list(map(itemgetter("pubkey"), accounts))
+                                    # print('ACCOUNTS')
+                                    # pprint(list(enumerate(accounts)))
                                     token_address = accounts[token_address_idx]
                                     pair_address = accounts[pair_address_idx]
                                     print(
@@ -137,16 +153,17 @@ class RaydiumV4Bot:
                                     https://solscan.io/account/{payer_keypair.pubkey()}"""
                                     )
                                     print()
+                                    i += 1
                                     await self.watch(
+                                        i=i,
                                         pair_address=pair_address,
                                         token_address=token_address,
-                                        buy_amount_in_sol=0.01,
+                                        buy_amount_in_sol=AMOUNT,
                                         min_amount_in_sol=MIN,
                                         profit_threshold=PROFIT,
                                         buy_slippage=BUY_SLIPPAGE,
                                         sell_slippage=SELL_SLIPPAGE,
                                     )
-                                    break
                                     print()
                                     print("=" * 120)
                                     print("NEXT")
@@ -158,11 +175,12 @@ class RaydiumV4Bot:
         self,
         /,
         *,
+        i,
         pair_address: str,
         token_address: str,
-        buy_amount_in_sol: float = 0.05,
-        min_amount_in_sol: int = 200,
-        profit_threshold: int = 7,
+        buy_amount_in_sol: float,
+        min_amount_in_sol: int,
+        profit_threshold: float,
         buy_slippage: int = 50,
         sell_slippage: int = 20,
     ):
@@ -173,14 +191,22 @@ class RaydiumV4Bot:
         if pool_keys:
             # check
 
-            current_price, base_amount = await self.current_price_and_amount_in_sol(pool_keys)
+            current_price, base_amount = await self.current_price_and_amount_in_sol(
+                pool_keys
+            )
             init_price = current_price
-            print(f"Token /{token_address}/  [{base_amount:4.2f} SOL]  {{{current_price:.18f}}}  (0.0%)")
+            print(
+                f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  (0.0%)"
+            )
 
-            if self.check and base_amount > min_amount_in_sol:
-                (freeze_authority, mint_authority, lp_burned) = await self.rug_checker(
-                    token_address
-                )
+            if base_amount < min_amount_in_sol:
+                print("Not enough SOL ")
+                return
+
+            if self.check:
+                report = await self.rug_checker(token_address)
+                print("Report", report)
+                (freeze_authority, mint_authority, lp_burned) = report
                 print("LP Burned: ", lp_burned)
 
                 if not freeze_authority:
@@ -208,29 +234,42 @@ class RaydiumV4Bot:
 
         swap_sol_for_token = True
         buy_price = 0
+        is_failed = False
+
+        number_of_tries_to_sell = 2
 
         while pool_keys:
             current_price, base_amount = await self.current_price_and_amount_in_sol(
                 pool_keys
             )
-            if not current_price or not base_amount:
+            if not (current_price and base_amount):
                 continue
 
             init_profit = round((current_price / init_price) * 100 - 100, 1)
             if swap_sol_for_token:
                 # buy tokens for SOL
                 print(
-                    f"Token /{token_address}/  [{base_amount:4.2f} SOL]  {{{current_price:.18f}}}  ({init_profit}%)"
+                    f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  ({init_profit}%)"
                 )
+
+                if init_profit < 0:
+                    print("Profit is negative. Not buying.")
+                    break
+
+                if base_amount < min_amount_in_sol:
+                    print(
+                        f"Current amount in SOL: {base_amount} SOL below the limit of {min_amount_in_sol} SOL"
+                    )
+                    return
 
                 is_bought = await self.try_buy(
                     pool_keys,
-                    base_amount,
                     buy_amount_in_sol,
                     buy_slippage,
-                    min_amount_in_sol,
                 )
                 if is_bought:
+                    print("\a")
+                    print("\a")
                     print(">>> BOUGHT")
                     buy_price = current_price
                     print(
@@ -238,36 +277,63 @@ class RaydiumV4Bot:
                     )
                     swap_sol_for_token = False
             else:
+                if not number_of_tries_to_sell:
+                    print("Failed to sell 2 times, saved as memories")
+                    return
                 # sell tokens for SOL
                 profit = round((current_price / buy_price) * 100 - 100, 1)
                 print(
-                    f"Token /{token_address}/  [{base_amount:4.2f} SOL]  {{{current_price:.18f}}}  ({profit}%)"
+                    f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  ({profit}%)"
                 )
 
-                is_sold = await self.try_sell(
-                    pool_keys, profit, sell_slippage, profit_threshold
-                )
-                if is_sold:
-                    print("<<< SOLD")
-                    sell_price = current_price
-                    buy_price = 0
-                    print(
-                        f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price} SOL/X!"
-                    )
-                    break
+                profitable = profit >= profit_threshold
+
+                if profitable or is_failed:
+                    is_sold = await self.try_sell(pool_keys, sell_slippage)
+                    number_of_tries_to_sell -= 1
+
+                    if is_sold:
+                        print("\a")
+                        sleep(0.12)
+                        print("\a")
+                        print("<<< SOLD")
+                        is_failed = False
+                        sell_price = current_price
+                        buy_price = 0
+                        print(
+                            f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price} SOL/X!"
+                        )
+                    else:
+                        is_failed = True
+                else:
+                    non_profitable = profit < 0
+                    if non_profitable:
+                        is_sold = await self.try_sell(pool_keys, sell_slippage)
+                        number_of_tries_to_sell -= 1
+
+                        if is_sold:
+                            print("<<< SOLD")
+                            is_failed = False
+                            sell_price = current_price
+                            buy_price = 0
+                            print(
+                                f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price} SOL/X!"
+                            )
+                        else:
+                            is_failed = True
 
             await asyncio.sleep(0.5)
 
     async def rug_checker(self, token_address: str):
-        n = 4
+        n = 2
+        url = f"https://api.rugcheck.xyz/v1/tokens/{token_address}/report"
         while n > 0:
-            print(f"Checking {token_address}...")
-            check = requests.get(
-                f"https://api.rugcheck.xyz/v1/tokens/{token_address}/report"
-            )
+            print(f"Checking {url} ...")
+            check = requests.get(url)
             print(f"API response: {check.status_code}")
             if check.status_code == 200:
                 report = check.json()
+                print(report)
                 freeze_authority = report["freezeAuthority"] is None
 
                 mint_authority = report["mintAuthority"] is None
@@ -295,43 +361,31 @@ class RaydiumV4Bot:
     async def try_buy(
         self,
         pool_keys: AmmV4PoolKeys,
-        base_amount: float,
         sol_in: float,
         slippage: int = 50,
-        min_amount_in_sol: int = 200,
     ):
-        try:
-            if base_amount >= min_amount_in_sol:
-                print(
-                    f"Current amount in SOL: {base_amount} SOL above the limit of {min_amount_in_sol} SOL"
-                )
-                if DRY_RUN:
-                    print("DRY RUN MODE! Not really buying...")
-                    return True
+        if DRY_RUN:
+            print("DRY RUN MODE! Not really buying...")
+            return True
 
-                print(f">>> TRY BUY {sol_in} SOL")
-                return bool(buy(sol_in=sol_in, slippage=slippage, pool_keys=pool_keys))
-            else:
-                return False
+        try:
+            print(f">>> TRY BUY FOR {sol_in} SOL")
+            return bool(buy(sol_in=sol_in, slippage=slippage, pool_keys=pool_keys))
         except:
             return False
 
     async def try_sell(
         self,
         pool_keys: AmmV4PoolKeys,
-        profit: float,
         slippage: int = 50,
-        take_profit: int = 10,
     ):
-        try:
-            if profit >= take_profit:
-                if DRY_RUN:
-                    return True
+        if DRY_RUN:
+            print("DRY RUN MODE! Not really selling...")
+            return True
 
-                print(f"<<< TRY SELL X.Y SOL")
-                return bool(sell(slippage=slippage, pool_keys=pool_keys))
-            else:
-                return False
+        try:
+            print(f"<<< TRY SELL FOR X SOL")
+            return bool(sell(slippage=slippage, pool_keys=pool_keys))
         except:
             return False
 
