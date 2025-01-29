@@ -270,7 +270,9 @@ def sell(
             close_wsol_account_instruction,
         ]
 
-        if percentage == 100:
+        # TODO some transaction failed because of this seventh instructions
+
+        if percentage == 100 or True:
             print("Preparing to close token account after swap...")
             close_token_account_instruction = close_account(
                 CloseAccountParams(
