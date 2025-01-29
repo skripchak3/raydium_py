@@ -45,6 +45,9 @@ load_dotenv()
 # just emulate real buy
 DRY_RUN = False
 
+# open browser tab
+OPEN_BROWSER = True
+
 # you have a force
 FORCE = False
 
@@ -150,9 +153,8 @@ class RaydiumV4Bot:
 
                                     if initial_amount_in_sol < MIN:
                                         logger.info(
-                                            f"Initial amount in SOL {initial_amount_in_sol} is less than {MIN} SOL. Skipping..."
+                                            f"Initial amount in SOL {initial_amount_in_sol} is less than {MIN} SOL."
                                         )
-                                        continue
                                     else:
                                         logger.info(
                                             f"Initial amount in SOL {initial_amount_in_sol:.2f}"
@@ -297,6 +299,15 @@ class RaydiumV4Bot:
                         )
                         return
                     # buy tokens for SOL
+
+                    current_price, base_amount = (
+                        await self.current_price_and_amount_in_sol(pool_keys)
+                    )
+
+                    if base_amount < min_amount_in_sol:
+                        logger.info(f"Not enough {base_amount:.2f} SOL")
+                        return
+
                     is_bought = await self.try_buy(
                         pool_keys,
                         buy_amount_in_sol,
@@ -307,10 +318,8 @@ class RaydiumV4Bot:
                         BEEP and logger.info("\a")
                         BEEP and logger.info("\a")
                         logger.info(">>> BOUGHT")
-                        buy_price, _ = await self.current_price_and_amount_in_sol(
-                            pool_keys
-                        )
-                        webbrowser.open(
+                        buy_price = current_price
+                        OPEN_BROWSER and webbrowser.open(
                             f"https://photon-sol.tinyastro.io/en/lp/{pair_address}"
                         )
                         logger.info(
