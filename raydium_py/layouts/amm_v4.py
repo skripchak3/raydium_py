@@ -122,11 +122,24 @@ OPEN_ORDERS_LAYOUT = cStruct(
     Padding(7),
 )
 
+PUBLIC_KEY_LAYOUT = Bytes(32)
+
+INIT_LOG_LAYOUT = cStruct(
+    "log_type" / Int8ul,
+    "time" / Int64ul,
+    "pc_decimals" / Int8ul,
+    "coin_decimals" / Int8ul,
+    "pc_lot_size" / Int64ul,
+    "coin_lot_size" / Int64ul,
+    "pc_amount" / Int64ul,
+    "coin_amount" / Int64ul,
+    "market" / PUBLIC_KEY_LAYOUT,
+)
+
 SWAP_LAYOUT = cStruct(
     "instruction" / Int8ul, "amount_in" / Int64ul, "min_amount_out" / Int64ul
 )
 
-PUBLIC_KEY_LAYOUT = Bytes(32)
 
 ACCOUNT_LAYOUT = cStruct(
     "mint" / PUBLIC_KEY_LAYOUT,
