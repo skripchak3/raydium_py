@@ -272,7 +272,7 @@ def sell(
 
         # TODO some transaction failed because of this seventh instructions
 
-        if percentage == 100 or True:
+        if percentage == 100:
             print("Preparing to close token account after swap...")
             close_token_account_instruction = close_account(
                 CloseAccountParams(

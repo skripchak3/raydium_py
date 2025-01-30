@@ -26,7 +26,7 @@ def get_token_balance(mint_str: str) -> float | None:
 
 
 def confirm_txn(
-    txn_sig: Signature, max_retries: int = 6, retry_interval: int = 3
+    txn_sig: Signature, max_retries: int = 10, retry_interval: int = 3
 ) -> bool:
     retries = 1
 

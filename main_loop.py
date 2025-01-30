@@ -33,8 +33,6 @@ from raydium_py.utils.pool_utils import (
     AmmV4PoolKeys,
 )
 
-ini_price = None
-
 logging.basicConfig(level=logging.CRITICAL, format="[%(asctime)s] %(message)s")
 
 logger = logging.getLogger(__name__)
@@ -51,16 +49,22 @@ OPEN_BROWSER = True
 # you have a force
 FORCE = False
 
+# buy single on multiple(N) tokens at the same time
+MULTI_BUY = False
+N = 3
+
 # beep-beep
 BEEP = True
 
-MIN = 500
-PROFIT = 2.9
-AMOUNT = 0.02
-DEEP = -1.0
+MIN = 300
+PROFIT = 1.0
+AMOUNT = 0.03
+DEEP = -15.0
 
 BUY_SLIPPAGE = 50
-SELL_SLIPPAGE = 50
+SELL_SLIPPAGE = 99
+
+API_KEY = getenv("RPC_API_KEY")
 
 PING_TIMEOUT = 300
 PING_INTERVAL = 300
@@ -72,12 +76,10 @@ INITIAL_COIN_AMOUNT_PREFIX_LEN = len(INITIAL_COIN_AMOUNT_PREFIX)
 INITIAL_OPEN_TIME_PREFIX = "open_time: "
 INITIAL_OPEN_TIME_PREFIX_LEN = len(INITIAL_OPEN_TIME_PREFIX)
 
-
 COMMITMENT = Confirmed
 TOKEN_ADDRESS_IDX = 18
 PAIR_ADDRESS_IDX = 2
 
-API_KEY = getenv("RPC_API_KEY")
 HTTP_URL = f"https://mainnet.helius-rpc.com/?api-key={API_KEY}"
 WS_URL = f"wss://mainnet.helius-rpc.com/?api-key={API_KEY}"
 PAIR_CREATED_EVENT = "initialize2"
@@ -99,6 +101,8 @@ class RaydiumV4Bot:
         self.check = not True
 
     async def loop(self):
+        tasks = set()
+        semaphore = asyncio.Semaphore(N if MULTI_BUY else 1)
         while True:
             try:
                 i = 0
@@ -106,7 +110,7 @@ class RaydiumV4Bot:
                     logger.info("DRY RUN MODE!!!")
 
                 logger.info(
-                    f"Starting with filter for more than {MIN} SOL and profit target {PROFIT}% for {AMOUNT} SOL"
+                    f"Starting with filter for more than {MIN} SOL and profit target {PROFIT}% for {AMOUNT} SOL in {N if MULTI_BUY else 1} buy mode"
                 )
 
                 async with connect(
@@ -171,9 +175,19 @@ class RaydiumV4Bot:
                                     tx = json.loads(tx.to_json())
                                     # logger.info('TX')
                                     # plogger.info(tx)
-                                    accounts = tx["result"]["transaction"]["message"][
-                                        "accountKeys"
-                                    ]
+                                    accounts = (
+                                        (tx or {})
+                                        .get("result", {})
+                                        .get("transaction", {})
+                                        .get("message", {})
+                                        .get("accountKeys", [])
+                                    )
+
+                                    if not accounts:
+                                        logger.info(
+                                            "Unknown transaction. No accounts. Skipping..."
+                                        )
+
                                     accounts = list(map(itemgetter("pubkey"), accounts))
                                     # logger.info('ACCOUNTS')
                                     # plogger.info(list(enumerate(accounts)))
@@ -196,16 +210,34 @@ class RaydiumV4Bot:
                                     logger.info("")
                                     i += 1
 
-                                    await self.watch(
-                                        i=i,
-                                        pair_address=pair_address,
-                                        token_address=token_address,
-                                        buy_amount_in_sol=AMOUNT,
-                                        min_amount_in_sol=MIN,
-                                        profit_threshold=PROFIT,
-                                        buy_slippage=BUY_SLIPPAGE,
-                                        sell_slippage=SELL_SLIPPAGE,
-                                    )
+                                    if MULTI_BUY:
+                                        task = asyncio.create_task(
+                                            self.watch(
+                                                i=i,
+                                                pair_address=pair_address,
+                                                token_address=token_address,
+                                                buy_amount_in_sol=AMOUNT,
+                                                min_amount_in_sol=MIN,
+                                                profit_threshold=PROFIT,
+                                                buy_slippage=BUY_SLIPPAGE,
+                                                sell_slippage=SELL_SLIPPAGE,
+                                                semaphore=semaphore,
+                                            )
+                                        )
+                                        tasks.add(task)
+                                        task.add_done_callback(tasks.discard)
+                                    else:
+                                        await self.watch(
+                                            i=i,
+                                            pair_address=pair_address,
+                                            token_address=token_address,
+                                            buy_amount_in_sol=AMOUNT,
+                                            min_amount_in_sol=MIN,
+                                            profit_threshold=PROFIT,
+                                            buy_slippage=BUY_SLIPPAGE,
+                                            sell_slippage=SELL_SLIPPAGE,
+                                            semaphore=semaphore,
+                                        )
 
                                     logger.info("")
                                     logger.info("=" * 110)
@@ -213,6 +245,13 @@ class RaydiumV4Bot:
                                     logger.info("=" * 110)
 
             except KeyboardInterrupt:
+                if MULTI_BUY:
+                    for task in tasks:
+                        task.cancel()
+                        try:
+                            await task
+                        except asyncio.CancelledError:
+                            pass
                 return
             except websockets.exceptions.ConnectionClosed:
                 logger.warning("Websocket closed. Reconnecting in 0 seconds...")
@@ -231,150 +270,150 @@ class RaydiumV4Bot:
         buy_amount_in_sol: float,
         min_amount_in_sol: int,
         profit_threshold: float,
+        semaphore: asyncio.Semaphore,
         buy_slippage: int = 50,
         sell_slippage: int = 20,
     ):
-        try:
-            pool_keys = fetch_amm_v4_pool_keys(pair_address)
+        async with semaphore:
+            try:
+                pool_keys = fetch_amm_v4_pool_keys(pair_address)
 
-            # if False:
-            #     # check
-            #
-            #     current_price, base_amount = await self.current_price_and_amount_in_sol(
-            #         pool_keys
-            #     )
-            #     init_price = current_price
-            #     logger.info(
-            #         f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  (0.0%)"
-            #     )
-            #
-            #     if base_amount < min_amount_in_sol:
-            #         logger.info("Not enough SOL ")
-            #         return
-            #
-            #     if self.check:
-            #         report = await self.rug_checker(token_address)
-            #         logger.info("Report", report)
-            #         (freeze_authority, mint_authority, lp_burned) = report
-            #         logger.info("LP Burned: ", lp_burned)
-            #
-            #         if not freeze_authority:
-            #             logger.info(f"Token {token_address} has freeze authority!")
-            #             if FORCE:
-            #                 logger.info("FORCE mode is on. Proceeding...")
-            #             else:
-            #                 return
-            #
-            #         if not mint_authority:
-            #             logger.info(f"Token {token_address} has mint authority!")
-            #             if FORCE:
-            #                 logger.info("FORCE mode is on. Proceeding...")
-            #             else:
-            #                 return
-            #
-            #         if not lp_burned:
-            #             logger.info(
-            #                 f"Liquidity Provider Tokens {token_address} has not been burned!"
-            #             )
-            #             if FORCE:
-            #                 logger.info("FORCE mode is on. Proceeding...")
-            #             else:
-            #                 return
+                # if False:
+                #     # check
+                #
+                #     current_price, base_amount = await self.current_price_and_amount_in_sol(
+                #         pool_keys
+                #     )
+                #     init_price = current_price
+                #     logger.info(
+                #         f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  (0.0%)"
+                #     )
+                #
+                #     if base_amount < min_amount_in_sol:
+                #         logger.info("Not enough SOL ")
+                #         return
+                #
+                #     if self.check:
+                #         report = await self.rug_checker(token_address)
+                #         logger.info("Report", report)
+                #         (freeze_authority, mint_authority, lp_burned) = report
+                #         logger.info("LP Burned: ", lp_burned)
+                #
+                #         if not freeze_authority:
+                #             logger.info(f"Token {token_address} has freeze authority!")
+                #             if FORCE:
+                #                 logger.info("FORCE mode is on. Proceeding...")
+                #             else:
+                #                 return
+                #
+                #         if not mint_authority:
+                #             logger.info(f"Token {token_address} has mint authority!")
+                #             if FORCE:
+                #                 logger.info("FORCE mode is on. Proceeding...")
+                #             else:
+                #                 return
+                #
+                #         if not lp_burned:
+                #             logger.info(
+                #                 f"Liquidity Provider Tokens {token_address} has not been burned!"
+                #             )
+                #             if FORCE:
+                #                 logger.info("FORCE mode is on. Proceeding...")
+                #             else:
+                #                 return
 
-            swap_sol_for_token = True
-            is_failed = False
+                swap_sol_for_token = True
+                is_failed = False
 
-            number_of_tries_to_buy = 0
-            max_number_of_tries_to_buy = 1
+                number_of_tries_to_buy = 0
+                max_number_of_tries_to_buy = 2
 
-            number_of_tries_to_sell = 0
-            max_number_of_tries_to_sell = 3
+                number_of_tries_to_sell = 0
+                max_number_of_tries_to_sell = 3
 
-            buy_price = 0
-            while pool_keys:
-                if swap_sol_for_token:
-                    if number_of_tries_to_buy == max_number_of_tries_to_buy:
-                        logger.info(
-                            f"Failed to buy {max_number_of_tries_to_buy} times, saved as memories"
-                        )
-                        return
-                    # buy tokens for SOL
-
-                    current_price, base_amount = (
-                        await self.current_price_and_amount_in_sol(pool_keys)
-                    )
-
-                    if base_amount < min_amount_in_sol:
-                        logger.info(f"Not enough {base_amount:.2f} SOL")
-                        return
-
-                    is_bought = await self.try_buy(
-                        pool_keys,
-                        buy_amount_in_sol,
-                        buy_slippage,
-                    )
-                    number_of_tries_to_buy += 1
-                    if is_bought:
-                        BEEP and logger.info("\a")
-                        BEEP and logger.info("\a")
-                        logger.info(">>> BOUGHT")
-                        buy_price = current_price
-                        OPEN_BROWSER and webbrowser.open(
-                            f"https://photon-sol.tinyastro.io/en/lp/{pair_address}"
-                        )
-                        logger.info(
-                            f"Swapped {buy_amount_in_sol} SOL for {token_address} at price {buy_price:.18f} SOL/X"
-                        )
-                        swap_sol_for_token = False
-                else:
-                    if number_of_tries_to_sell == max_number_of_tries_to_sell:
-                        logger.info(
-                            f"Failed to sell {max_number_of_tries_to_sell} times, saved as memories"
-                        )
-                        return
-                    # sell tokens for SOL
-
-                    current_price, base_amount = (
-                        await self.current_price_and_amount_in_sol(pool_keys)
-                    )
-                    logger.debug(f"INI PRICE {ini_price:.18f}")
-                    logger.debug(f"BUY PRICE {buy_price:.18f}")
-                    logger.debug(f"NOW PRICE {current_price:.18f}")
-
-                    profit = round((current_price / buy_price) * 100 - 100, 2)
-
-                    logger.info(
-                        f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  ({profit:.2f}%)"
-                    )
-
-                    profitable = profit >= profit_threshold
-
-                    if profitable or is_failed:
-                        is_sold = await self.try_sell(pool_keys, sell_slippage)
-                        number_of_tries_to_sell += 1
-
-                        if is_sold:
-                            BEEP and logger.info("\a")
-                            sleep(0.12)
-                            BEEP and logger.info("\a")
-                            logger.info("<<< SOLD")
-                            sell_price = current_price
+                buy_price = 0
+                while pool_keys:
+                    if swap_sol_for_token:
+                        if number_of_tries_to_buy == max_number_of_tries_to_buy:
                             logger.info(
-                                f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price:.18f} SOL/X!"
+                                f"Failed to buy {max_number_of_tries_to_buy} times"
                             )
                             return
-                        else:
-                            is_failed = True
+                        # buy tokens for SOL
+
+                        current_data = await self.current_price_and_amount_in_sol(
+                            pool_keys
+                        )
+
+                        if not current_data:
+                            logger.info("No current data")
+                            await asyncio.sleep(0.5)
+                            continue
+
+                        current_price, base_amount = current_data
+
+                        if base_amount < min_amount_in_sol:
+                            logger.info(f"Not enough {base_amount:.2f} SOL")
+                            return
+
+                        is_bought = await self.try_buy(
+                            pool_keys,
+                            buy_amount_in_sol,
+                            buy_slippage,
+                        )
+                        number_of_tries_to_buy += 1
+
+                        if is_bought:
+                            BEEP and logger.info("\a")
+                            BEEP and logger.info("\a")
+                            logger.info(">>> BOUGHT")
+                            buy_price = current_price
+                            OPEN_BROWSER and webbrowser.open(
+                                f"https://photon-sol.tinyastro.io/en/lp/{pair_address}"
+                            )
+                            logger.info(
+                                f"Swapped {buy_amount_in_sol} SOL for {token_address} at price {buy_price:.18f} SOL/X"
+                            )
+                            swap_sol_for_token = False
                     else:
-                        non_profitable = profit < DEEP
-                        if non_profitable:
-                            logger.info(f"Big deep {profit}%. SELL !")
+                        if number_of_tries_to_sell == max_number_of_tries_to_sell:
+                            logger.info(
+                                f"Failed to sell {max_number_of_tries_to_sell} times, saved as memories"
+                            )
+                            return
+                        # sell tokens for SOL
+
+                        current_data = await self.current_price_and_amount_in_sol(
+                            pool_keys
+                        )
+
+                        if not current_data:
+                            logger.info("No current data")
+                            await asyncio.sleep(0.5)
+                            continue
+
+                        current_price, base_amount = current_data
+
+                        logger.debug(f"BUY PRICE {buy_price:.18f}")
+                        logger.debug(f"NOW PRICE {current_price:.18f}")
+
+                        profit = round((current_price / buy_price) * 100 - 100, 2)
+
+                        logger.info(
+                            f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  ({profit:.2f}%)"
+                        )
+
+                        profitable = profit >= profit_threshold
+
+                        if profitable or is_failed:
                             is_sold = await self.try_sell(pool_keys, sell_slippage)
                             number_of_tries_to_sell += 1
 
                             if is_sold:
+                                BEEP and logger.info("\a")
+                                sleep(0.12)
+                                BEEP and logger.info("\a")
                                 logger.info("<<< SOLD")
-                                is_failed = False
                                 sell_price = current_price
                                 logger.info(
                                     f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price:.18f} SOL/X!"
@@ -382,12 +421,29 @@ class RaydiumV4Bot:
                                 return
                             else:
                                 is_failed = True
+                        else:
+                            non_profitable = profit < DEEP
+                            if non_profitable:
+                                logger.info(f"Big deep {profit}%. SELL !")
+                                is_sold = await self.try_sell(pool_keys, sell_slippage)
+                                number_of_tries_to_sell += 1
 
-                await asyncio.sleep(0.5)
-        except Exception as e:
-            logger.info(f"Exception {type(e)}\nRestarting in 0 seconds...")
-            _, _, tb = sys.exc_info()
-            print(f"LINE {tb.tb_lineno}")
+                                if is_sold:
+                                    logger.info("<<< SOLD")
+                                    is_failed = False
+                                    sell_price = current_price
+                                    logger.info(
+                                        f"Swapped {token_address} for ~{buy_amount_in_sol} SOL at price {sell_price:.18f} SOL/X!"
+                                    )
+                                    return
+                                else:
+                                    is_failed = True
+
+                    await asyncio.sleep(0.5)
+            except Exception as e:
+                logger.info(f"Exception {type(e)}\nRestarting in 0 seconds...")
+                _, _, tb = sys.exc_info()
+                print(f"LINE {tb.tb_lineno}")
 
     async def rug_checker(self, token_address: str):
         n = 2
@@ -451,7 +507,6 @@ class RaydiumV4Bot:
             initial_amount_in_sol = initial_amount_in_lamports / 1e9
 
             if True:
-                global ini_price
                 coin_start = pool_created_log.find(INITIAL_OPEN_TIME_PREFIX)
                 coin_end = pool_created_log.find(",", coin_start)
                 coin_amount = int(
