@@ -15,13 +15,15 @@ import uvloop
 import websockets
 from dotenv import load_dotenv
 from solana.rpc.async_api import AsyncClient
-from solana.rpc.commitment import Confirmed
+from solana.rpc.commitment import Confirmed, Finalized
 from solana.rpc.websocket_api import connect
+from solders.pubkey import Pubkey
 from solders.rpc.config import RpcTransactionLogsFilterMentions
 from solders.rpc.responses import (
     SubscriptionResult,
     LogsNotification,
 )
+from solders.token.state import Mint
 from typing_extensions import Optional
 
 from raydium_py.config import payer_keypair
@@ -41,7 +43,7 @@ logger.setLevel(logging.INFO)
 load_dotenv()
 
 # just emulate real buy
-DRY_RUN = False
+DRY_RUN = True
 
 # open browser tab
 OPEN_BROWSER = True
@@ -56,7 +58,7 @@ N = 3
 # beep-beep
 BEEP = True
 
-MIN = 300
+MIN = 0
 PROFIT = 1.0
 AMOUNT = 0.03
 DEEP = -15.0
@@ -76,8 +78,9 @@ INITIAL_COIN_AMOUNT_PREFIX_LEN = len(INITIAL_COIN_AMOUNT_PREFIX)
 INITIAL_OPEN_TIME_PREFIX = "open_time: "
 INITIAL_OPEN_TIME_PREFIX_LEN = len(INITIAL_OPEN_TIME_PREFIX)
 
-COMMITMENT = Confirmed
-TOKEN_ADDRESS_IDX = 18
+COMMITMENT = Finalized
+TOKEN_ADDRESS_IDX = 19
+LP_TOKEN_ADDRESS_IDX = 14
 PAIR_ADDRESS_IDX = 2
 
 HTTP_URL = f"https://mainnet.helius-rpc.com/?api-key={API_KEY}"
@@ -150,18 +153,18 @@ class RaydiumV4Bot:
                                         pool_created_logs[0]
                                     )
                                     if not initial_amount_in_sol:
-                                        logger.debug(
+                                        logger.info(
                                             "No initial amount in SOL. Skipping..."
                                         )
                                         continue
 
+                                    logger.info(
+                                        f"Initial amount in SOL {initial_amount_in_sol:.6f}"
+                                    )
+
                                     if initial_amount_in_sol < MIN:
                                         logger.info(
                                             f"Initial amount in SOL {initial_amount_in_sol} is less than {MIN} SOL."
-                                        )
-                                    else:
-                                        logger.info(
-                                            f"Initial amount in SOL {initial_amount_in_sol:.2f}"
                                         )
 
                                     tx = await client.get_transaction(
@@ -182,20 +185,33 @@ class RaydiumV4Bot:
                                         .get("message", {})
                                         .get("accountKeys", [])
                                     )
+                                    accounts = list(map(itemgetter("pubkey"), accounts))
 
                                     if not accounts:
                                         logger.info(
                                             "Unknown transaction. No accounts. Skipping..."
                                         )
 
-                                    accounts = list(map(itemgetter("pubkey"), accounts))
-                                    # logger.info('ACCOUNTS')
-                                    # plogger.info(list(enumerate(accounts)))
-                                    token_address = accounts[TOKEN_ADDRESS_IDX]
-                                    pair_address = accounts[PAIR_ADDRESS_IDX]
+                                    pprint(list(enumerate(accounts)))
+                                    # token_address = accounts[TOKEN_ADDRESS_IDX]
+                                    token_address = Pubkey.from_string(
+                                        accounts[TOKEN_ADDRESS_IDX]
+                                    )
+                                    # lp_token_address = accounts[LP_TOKEN_ADDRESS_IDX]
+                                    lp_token_address = Pubkey.from_string(
+                                        accounts[LP_TOKEN_ADDRESS_IDX]
+                                    )
+                                    # pair_address = accounts[PAIR_ADDRESS_IDX]
+                                    pair_address = Pubkey.from_string(
+                                        accounts[PAIR_ADDRESS_IDX]
+                                    )
                                     logger.info(
                                         f"""Token address:
                                         https://solscan.io/token/{token_address}"""
+                                    )
+                                    logger.info(
+                                        f"""LP Token address:
+                                        https://solscan.io/token/{lp_token_address}"""
                                     )
                                     logger.info(
                                         f"""Pair address:
@@ -216,6 +232,7 @@ class RaydiumV4Bot:
                                                 i=i,
                                                 pair_address=pair_address,
                                                 token_address=token_address,
+                                                lp_token_address=lp_token_address,
                                                 buy_amount_in_sol=AMOUNT,
                                                 min_amount_in_sol=MIN,
                                                 profit_threshold=PROFIT,
@@ -231,6 +248,7 @@ class RaydiumV4Bot:
                                             i=i,
                                             pair_address=pair_address,
                                             token_address=token_address,
+                                            lp_token_address=lp_token_address,
                                             buy_amount_in_sol=AMOUNT,
                                             min_amount_in_sol=MIN,
                                             profit_threshold=PROFIT,
@@ -265,8 +283,9 @@ class RaydiumV4Bot:
         /,
         *,
         i,
-        pair_address: str,
-        token_address: str,
+        pair_address: Pubkey,
+        token_address: Pubkey,
+        lp_token_address: Pubkey,
         buy_amount_in_sol: float,
         min_amount_in_sol: int,
         profit_threshold: float,
@@ -278,49 +297,20 @@ class RaydiumV4Bot:
             try:
                 pool_keys = fetch_amm_v4_pool_keys(pair_address)
 
-                # if False:
-                #     # check
-                #
-                #     current_price, base_amount = await self.current_price_and_amount_in_sol(
-                #         pool_keys
-                #     )
-                #     init_price = current_price
-                #     logger.info(
-                #         f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  (0.0%)"
-                #     )
-                #
-                #     if base_amount < min_amount_in_sol:
-                #         logger.info("Not enough SOL ")
-                #         return
-                #
-                #     if self.check:
-                #         report = await self.rug_checker(token_address)
-                #         logger.info("Report", report)
-                #         (freeze_authority, mint_authority, lp_burned) = report
-                #         logger.info("LP Burned: ", lp_burned)
-                #
-                #         if not freeze_authority:
-                #             logger.info(f"Token {token_address} has freeze authority!")
-                #             if FORCE:
-                #                 logger.info("FORCE mode is on. Proceeding...")
-                #             else:
-                #                 return
-                #
-                #         if not mint_authority:
-                #             logger.info(f"Token {token_address} has mint authority!")
-                #             if FORCE:
-                #                 logger.info("FORCE mode is on. Proceeding...")
-                #             else:
-                #                 return
-                #
-                #         if not lp_burned:
-                #             logger.info(
-                #                 f"Liquidity Provider Tokens {token_address} has not been burned!"
-                #             )
-                #             if FORCE:
-                #                 logger.info("FORCE mode is on. Proceeding...")
-                #             else:
-                #                 return
+                if not pool_keys:
+                    logger.info(f"No pool keys")
+
+                mint_and_freeze_ok = await self.mint_and_freeze_authorities(
+                    token_address
+                )
+                logger.info(f"Mint and Freeze OK: {mint_and_freeze_ok}")
+
+                lp_burned = await self.lp_tokens_burned(lp_token_address)
+                logger.info(f"LP Tokens Burned: {lp_burned}")
+
+                if not (lp_burned and mint_and_freeze_ok):
+                    logger.info("Scam. Skipping.")
+                    return
 
                 swap_sol_for_token = True
                 is_failed = False
@@ -445,6 +435,58 @@ class RaydiumV4Bot:
                 _, _, tb = sys.exc_info()
                 print(f"LINE {tb.tb_lineno}")
 
+    async def mint_and_freeze_authorities(self, token_address: Pubkey) -> bool:
+        k = 2
+        n = k
+        while n > 0:
+            try:
+                mint_account = await client.get_account_info(token_address)
+                n -= 1
+
+                logger.debug(f"Token mint account: {mint_account}")
+                account_data = mint_account.value.data
+                logger.debug(f"Account data: {account_data}")
+
+                if not account_data:
+                    logger.info("No mint account data")
+                    continue
+
+                mint = Mint.from_bytes(account_data)
+                logger.debug(f"Mint: {mint}")
+                logger.info(f"Mint authority: {mint.mint_authority}")
+                logger.info(f"Freeze authority: {mint.freeze_authority}")
+                return mint.mint_authority is None and mint.freeze_authority is None
+            except Exception as e:
+                logger.error(f"ERROR WHILE CHECK MINT & FREEZE {type(e)}: {e}")
+        else:
+            logger.error(f"ERROR WHILE CHECK MINT & FREEZE in {k} retries")
+            return False
+
+    async def lp_tokens_burned(self, lp_token_address: Pubkey) -> bool:
+        n = 2
+        while n > 0:
+            try:
+                lp_mint_account = await client.get_account_info(lp_token_address)
+                n -= 1
+
+                logger.debug(f"LP Token mint account: {lp_mint_account}")
+                account_data = lp_mint_account.value.data
+                logger.debug(f"Account data: {account_data}")
+
+                if not account_data:
+                    logger.info("No LP token account data")
+                    continue
+
+                mint = Mint.from_bytes(account_data)
+                logger.debug(f"LP Mint: {mint}")
+                logger.info(f"LP Freeze authority: {mint.freeze_authority}")
+                logger.info(f"LP supply: {mint.supply}")
+                return mint.freeze_authority is None and mint.supply == 0
+            except Exception as e:
+                logger.debug(f"ERROR WHILE CHECK LP BURNED {type(e)}: {e}")
+        else:
+            return False
+
     async def rug_checker(self, token_address: str):
         n = 2
         url = f"https://api.rugcheck.xyz/v1/tokens/{token_address}/report"
@@ -516,12 +558,12 @@ class RaydiumV4Bot:
                 )
                 coin_amount_in_sol = coin_amount / 1e6
 
-                logger.info(f"SOL AMOUNT {initial_amount_in_sol:.2f}")
-                logger.info(f"COIN AMOUNT {coin_amount_in_sol:.18f}")
+                logger.debug(f"SOL AMOUNT {initial_amount_in_sol:.2f}")
+                logger.debug(f"COIN AMOUNT {coin_amount_in_sol:.18f}")
 
                 ini_price = coin_amount_in_sol / initial_amount_in_sol
 
-                logger.info(f"INI PRICE {ini_price:.18f}")
+                logger.debug(f"INI PRICE {ini_price:.18f}")
 
             return initial_amount_in_sol
 

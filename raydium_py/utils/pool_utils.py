@@ -116,7 +116,7 @@ class DIRECTION(Enum):
     SELL = 1
 
 
-def fetch_amm_v4_pool_keys(pair_address: str) -> Optional[AmmV4PoolKeys]:
+def fetch_amm_v4_pool_keys(amm_id: Pubkey) -> Optional[AmmV4PoolKeys]:
 
     def bytes_of(value):
         if not (0 <= value < 2**64):
@@ -124,7 +124,6 @@ def fetch_amm_v4_pool_keys(pair_address: str) -> Optional[AmmV4PoolKeys]:
         return struct.pack("<Q", value)
 
     try:
-        amm_id = Pubkey.from_string(pair_address)
         amm_data = client.get_account_info_json_parsed(
             amm_id, commitment=Processed
         ).value.data
