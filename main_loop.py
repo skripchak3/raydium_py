@@ -1,11 +1,10 @@
 #!/usr/bin/env python
 
 import asyncio
-import json
 import logging
+import random
 import sys
 import webbrowser
-from operator import itemgetter
 from os import getenv
 from pprint import pprint
 from time import sleep
@@ -15,7 +14,7 @@ import uvloop
 import websockets
 from dotenv import load_dotenv
 from solana.rpc.async_api import AsyncClient
-from solana.rpc.commitment import Confirmed, Finalized
+from solana.rpc.commitment import Confirmed
 from solana.rpc.websocket_api import connect
 from solders.pubkey import Pubkey
 from solders.rpc.config import RpcTransactionLogsFilterMentions
@@ -43,7 +42,7 @@ logger.setLevel(logging.INFO)
 load_dotenv()
 
 # just emulate real buy
-DRY_RUN = True
+DRY_RUN = False
 
 # open browser tab
 OPEN_BROWSER = True
@@ -58,18 +57,18 @@ N = 3
 # beep-beep
 BEEP = True
 
-MIN = 0
-PROFIT = 1.0
+MIN = 100
+PROFIT = 8.3
 AMOUNT = 0.03
-DEEP = -15.0
+DEEP = -50.0
 
 BUY_SLIPPAGE = 50
 SELL_SLIPPAGE = 99
 
-API_KEY = getenv("RPC_API_KEY")
+MINT_FREEZE_CHECK = True
+LP_BURNED_CHECK = False
 
-PING_TIMEOUT = 300
-PING_INTERVAL = 300
+API_KEY = getenv("RPC_API_KEY")
 
 INITIAL_SOL_AMOUNT_PREFIX = "init_pc_amount: "
 INITIAL_SOL_AMOUNT_PREFIX_LEN = len(INITIAL_SOL_AMOUNT_PREFIX)
@@ -78,9 +77,7 @@ INITIAL_COIN_AMOUNT_PREFIX_LEN = len(INITIAL_COIN_AMOUNT_PREFIX)
 INITIAL_OPEN_TIME_PREFIX = "open_time: "
 INITIAL_OPEN_TIME_PREFIX_LEN = len(INITIAL_OPEN_TIME_PREFIX)
 
-COMMITMENT = Finalized
-TOKEN_ADDRESS_IDX = 19
-LP_TOKEN_ADDRESS_IDX = 14
+COMMITMENT = Confirmed
 PAIR_ADDRESS_IDX = 2
 
 HTTP_URL = f"https://mainnet.helius-rpc.com/?api-key={API_KEY}"
@@ -116,9 +113,7 @@ class RaydiumV4Bot:
                     f"Starting with filter for more than {MIN} SOL and profit target {PROFIT}% for {AMOUNT} SOL in {N if MULTI_BUY else 1} buy mode"
                 )
 
-                async with connect(
-                    WS_URL, ping_interval=PING_INTERVAL, ping_timeout=PING_TIMEOUT
-                ) as ws:
+                async with connect(WS_URL) as ws:
                     # subscribe to all events from Raydium V4
                     await ws.logs_subscribe(
                         filter_=RpcTransactionLogsFilterMentions(RAYDIUM_AMM_V4),
@@ -148,76 +143,66 @@ class RaydiumV4Bot:
                                         f"""Pair created:
                                         https://solscan.io/tx/{tx_hash}"""
                                     )
-
-                                    initial_amount_in_sol = self.initial_amount_in_sol(
-                                        pool_created_logs[0]
-                                    )
-                                    if not initial_amount_in_sol:
-                                        logger.info(
-                                            "No initial amount in SOL. Skipping..."
-                                        )
-                                        continue
-
-                                    logger.info(
-                                        f"Initial amount in SOL {initial_amount_in_sol:.6f}"
-                                    )
-
-                                    if initial_amount_in_sol < MIN:
-                                        logger.info(
-                                            f"Initial amount in SOL {initial_amount_in_sol} is less than {MIN} SOL."
-                                        )
-
                                     tx = await client.get_transaction(
                                         tx_hash,
                                         commitment=COMMITMENT,
                                         encoding="jsonParsed",
                                         max_supported_transaction_version=1,
                                     )
-                                    # print("RAW TX")
-                                    # pprint(tx)
-                                    tx = json.loads(tx.to_json())
-                                    # logger.info('TX')
-                                    # plogger.info(tx)
-                                    accounts = (
-                                        (tx or {})
-                                        .get("result", {})
-                                        .get("transaction", {})
-                                        .get("message", {})
-                                        .get("accountKeys", [])
-                                    )
-                                    accounts = list(map(itemgetter("pubkey"), accounts))
+                                    try:
+                                        accounts = (
+                                            tx.value.transaction.transaction.message.account_keys
+                                        )
+                                    except AttributeError:
+                                        accounts = []
 
                                     if not accounts:
                                         logger.info(
                                             "Unknown transaction. No accounts. Skipping..."
                                         )
 
-                                    pprint(list(enumerate(accounts)))
-                                    # token_address = accounts[TOKEN_ADDRESS_IDX]
-                                    token_address = Pubkey.from_string(
-                                        accounts[TOKEN_ADDRESS_IDX]
-                                    )
-                                    # lp_token_address = accounts[LP_TOKEN_ADDRESS_IDX]
-                                    lp_token_address = Pubkey.from_string(
-                                        accounts[LP_TOKEN_ADDRESS_IDX]
-                                    )
-                                    # pair_address = accounts[PAIR_ADDRESS_IDX]
-                                    pair_address = Pubkey.from_string(
-                                        accounts[PAIR_ADDRESS_IDX]
-                                    )
-                                    logger.info(
-                                        f"""Token address:
-                                        https://solscan.io/token/{token_address}"""
-                                    )
-                                    logger.info(
-                                        f"""LP Token address:
-                                        https://solscan.io/token/{lp_token_address}"""
-                                    )
+                                    pair_address = accounts[PAIR_ADDRESS_IDX].pubkey
                                     logger.info(
                                         f"""Pair address:
                                         https://photon-sol.tinyastro.io/en/lp/{pair_address}
                                         https://dexscreener.com/solana/{pair_address}"""
                                     )
+
+                                    tt = 3
+                                    while tt > 0:
+                                        tt -= 1
+                                        pool_keys = fetch_amm_v4_pool_keys(pair_address)
+
+                                        if not pool_keys:
+                                            logger.info(
+                                                f"No pool keys. Trying again {tt} times..."
+                                            )
+                                        else:
+                                            break
+                                    else:
+                                        pool_keys = None
+
+                                    if not pool_keys:
+                                        logger.info("No pool keys. Skipping...")
+                                        continue
+
+                                    token_address = (
+                                        pool_keys.base_mint
+                                        if str(pool_keys.quote_mint)
+                                        == "So11111111111111111111111111111111111111112"
+                                        else pool_keys.quote_mint
+                                    )
+                                    logger.info(
+                                        f"""Token address:
+                                        https://solscan.io/token/{token_address}"""
+                                    )
+
+                                    lp_token_address = pool_keys.lp_mint
+                                    logger.info(
+                                        f"""LP Token address:
+                                        https://solscan.io/token/{lp_token_address}"""
+                                    )
+
                                     logger.info(
                                         f"""Me:
                                         {payer_keypair.pubkey()}
@@ -239,6 +224,7 @@ class RaydiumV4Bot:
                                                 buy_slippage=BUY_SLIPPAGE,
                                                 sell_slippage=SELL_SLIPPAGE,
                                                 semaphore=semaphore,
+                                                pool_keys=pool_keys,
                                             )
                                         )
                                         tasks.add(task)
@@ -255,6 +241,7 @@ class RaydiumV4Bot:
                                             buy_slippage=BUY_SLIPPAGE,
                                             sell_slippage=SELL_SLIPPAGE,
                                             semaphore=semaphore,
+                                            pool_keys=pool_keys,
                                         )
 
                                     logger.info("")
@@ -290,27 +277,31 @@ class RaydiumV4Bot:
         min_amount_in_sol: int,
         profit_threshold: float,
         semaphore: asyncio.Semaphore,
+        pool_keys: AmmV4PoolKeys,
         buy_slippage: int = 50,
         sell_slippage: int = 20,
     ):
+        pp = 3
         async with semaphore:
+            # for not hardcoded profit point
+            jitter = random.uniform(0.1, 0.5) * 2
+            profit_threshold -= jitter
             try:
-                pool_keys = fetch_amm_v4_pool_keys(pair_address)
+                if MINT_FREEZE_CHECK:
+                    mint_and_freeze_ok = await self.mint_and_freeze_authorities(
+                        token_address
+                    )
+                    logger.info(f"Mint and Freeze OK: {mint_and_freeze_ok}")
+                    if not mint_and_freeze_ok:
+                        logger.info("Scam. Skipping.")
+                        return
 
-                if not pool_keys:
-                    logger.info(f"No pool keys")
-
-                mint_and_freeze_ok = await self.mint_and_freeze_authorities(
-                    token_address
-                )
-                logger.info(f"Mint and Freeze OK: {mint_and_freeze_ok}")
-
-                lp_burned = await self.lp_tokens_burned(lp_token_address)
-                logger.info(f"LP Tokens Burned: {lp_burned}")
-
-                if not (lp_burned and mint_and_freeze_ok):
-                    logger.info("Scam. Skipping.")
-                    return
+                if LP_BURNED_CHECK:
+                    lp_burned = await self.lp_tokens_burned(lp_token_address)
+                    logger.info(f"LP Tokens Burned: {lp_burned}")
+                    if not lp_burned:
+                        logger.info("Scam. Skipping.")
+                        return
 
                 swap_sol_for_token = True
                 is_failed = False
@@ -387,10 +378,10 @@ class RaydiumV4Bot:
                         logger.debug(f"BUY PRICE {buy_price:.18f}")
                         logger.debug(f"NOW PRICE {current_price:.18f}")
 
-                        profit = round((current_price / buy_price) * 100 - 100, 2)
+                        profit = round((current_price / buy_price) * 100 - 100, pp)
 
                         logger.info(
-                            f"#{i:05d} Token /{token_address}/  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  ({profit:.2f}%)"
+                            f"#{i:03d}  {token_address}  [{base_amount:7.2f} SOL]  {{{current_price:.18f}}}  ({profit:.{pp}f}%/{profit_threshold:.{pp}f}%)"
                         )
 
                         profitable = profit >= profit_threshold

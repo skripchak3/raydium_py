@@ -1,6 +1,7 @@
 import struct
 from dataclasses import dataclass
 from enum import Enum
+from pprint import pprint
 from typing import Optional
 
 from solana.rpc.commitment import Processed
@@ -27,6 +28,7 @@ class AmmV4PoolKeys:
     amm_id: Pubkey
     base_mint: Pubkey
     quote_mint: Pubkey
+    lp_mint: Pubkey
     base_decimals: int
     quote_decimals: int
     open_orders: Pubkey
@@ -149,6 +151,7 @@ def fetch_amm_v4_pool_keys(amm_id: Pubkey) -> Optional[AmmV4PoolKeys]:
             amm_id=amm_id,
             base_mint=Pubkey.from_bytes(market_decoded.base_mint),
             quote_mint=Pubkey.from_bytes(market_decoded.quote_mint),
+            lp_mint=Pubkey.from_bytes(amm_data_decoded.lpMintAddress),
             base_decimals=amm_data_decoded.coinDecimals,
             quote_decimals=amm_data_decoded.pcDecimals,
             open_orders=Pubkey.from_bytes(amm_data_decoded.ammOpenOrders),
