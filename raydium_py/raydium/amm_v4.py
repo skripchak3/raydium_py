@@ -171,6 +171,7 @@ def sell(
     percentage: int = 100,
     slippage: int = 5,
     pool_keys: Optional[AmmV4PoolKeys] = None,
+    gas_price_scale: float = 1,
 ) -> bool:
     try:
         if not (1 <= percentage <= 100):
@@ -263,7 +264,7 @@ def sell(
 
         instructions = [
             set_compute_unit_limit(UNIT_BUDGET),
-            set_compute_unit_price(UNIT_PRICE),
+            set_compute_unit_price(int(UNIT_PRICE * gas_price_scale)),
             create_wsol_account_instruction,
             init_wsol_account_instruction,
             swap_instructions,
@@ -272,7 +273,7 @@ def sell(
 
         # TODO some transaction failed because of this seventh instructions
 
-        if percentage == 100:
+        if percentage == 100 and False:
             print("Preparing to close token account after swap...")
             close_token_account_instruction = close_account(
                 CloseAccountParams(
