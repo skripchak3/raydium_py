@@ -1,16 +1,18 @@
 import base64
 import os
-from typing import Optional
+
+from solana.rpc.api import Client
 from solana.rpc.commitment import Processed
 from solana.rpc.types import TokenAccountOpts, TxOpts
-from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price  # type: ignore
-from solders.message import MessageV0  # type: ignore
-from solders.pubkey import Pubkey  # type: ignore
+from solders.compute_budget import set_compute_unit_limit, set_compute_unit_price
+from solders.keypair import Keypair
+from solders.message import MessageV0
+from solders.pubkey import Pubkey
 from solders.system_program import (
     CreateAccountWithSeedParams,
     create_account_with_seed,
 )
-from solders.transaction import VersionedTransaction  # type: ignore
+from solders.transaction import VersionedTransaction
 from spl.token.client import Token
 from spl.token.instructions import (
     CloseAccountParams,
@@ -20,34 +22,32 @@ from spl.token.instructions import (
     get_associated_token_address,
     initialize_account,
 )
-from raydium_py.utils.common_utils import confirm_txn, get_token_balance
-from raydium_py.utils.pool_utils import (
-    AmmV4PoolKeys,
-    fetch_amm_v4_pool_keys,
-    get_amm_v4_reserves,
-    make_amm_v4_swap_instruction,
-)
-from raydium_py.config import client, payer_keypair, UNIT_BUDGET, UNIT_PRICE
+
 from raydium_py.raydium.constants import (
     ACCOUNT_LAYOUT_LEN,
     SOL_DECIMAL,
     TOKEN_PROGRAM_ID,
     WSOL,
 )
+from raydium_py.raydium.gas import GasConfig
+from raydium_py.utils.common_utils import confirm_txn, get_token_balance
+from raydium_py.utils.pool_utils import (
+    AmmV4PoolKeys,
+    get_amm_v4_reserves,
+    make_amm_v4_swap_instruction,
+)
 
 
 def buy(
-    sol_in: float = 0.01,
-    slippage: int = 5,
-    pool_keys: Optional[AmmV4PoolKeys] = None,
+    client: Client,
+    sender: Keypair,
+    sol_in: float,
+    slippage: int,
+    pool_keys: AmmV4PoolKeys,
+    gas_config: GasConfig,
 ) -> bool:
+    sender_address = sender.pubkey()
     try:
-        print("Fetching pool keys...")
-        if pool_keys is None:
-            print("No pool keys found...")
-            return False
-        print("Pool keys fetched successfully.")
-
         mint = (
             pool_keys.base_mint if pool_keys.base_mint != WSOL else pool_keys.quote_mint
         )
@@ -66,32 +66,32 @@ def buy(
 
         print("Checking for existing token account...")
         token_account_check = client.get_token_accounts_by_owner(
-            payer_keypair.pubkey(), TokenAccountOpts(mint), Processed
+            sender_address, TokenAccountOpts(mint), Processed
         )
         if token_account_check.value:
             token_account = token_account_check.value[0].pubkey
             create_token_account_instruction = None
             print("Token account found.")
         else:
-            token_account = get_associated_token_address(payer_keypair.pubkey(), mint)
+            token_account = get_associated_token_address(sender_address, mint)
             create_token_account_instruction = create_associated_token_account(
-                payer_keypair.pubkey(), payer_keypair.pubkey(), mint
+                sender_address, sender_address, mint
             )
             print("No existing token account found; creating associated token account.")
 
         print("Generating seed for WSOL account...")
         seed = base64.urlsafe_b64encode(os.urandom(24)).decode("utf-8")
         wsol_token_account = Pubkey.create_with_seed(
-            payer_keypair.pubkey(), seed, TOKEN_PROGRAM_ID
+            sender_address, seed, TOKEN_PROGRAM_ID
         )
         balance_needed = Token.get_min_balance_rent_for_exempt_for_account(client)
 
         print("Creating and initializing WSOL account...")
         create_wsol_account_instruction = create_account_with_seed(
             CreateAccountWithSeedParams(
-                from_pubkey=payer_keypair.pubkey(),
+                from_pubkey=sender_address,
                 to_pubkey=wsol_token_account,
-                base=payer_keypair.pubkey(),
+                base=sender_address,
                 seed=seed,
                 lamports=int(balance_needed + amount_in),
                 space=ACCOUNT_LAYOUT_LEN,
@@ -104,7 +104,7 @@ def buy(
                 program_id=TOKEN_PROGRAM_ID,
                 account=wsol_token_account,
                 mint=WSOL,
-                owner=payer_keypair.pubkey(),
+                owner=sender_address,
             )
         )
 
@@ -115,7 +115,7 @@ def buy(
             token_account_in=wsol_token_account,
             token_account_out=token_account,
             accounts=pool_keys,
-            owner=payer_keypair.pubkey(),
+            owner=sender_address,
         )
 
         print("Preparing to close WSOL account after swap...")
@@ -123,14 +123,14 @@ def buy(
             CloseAccountParams(
                 program_id=TOKEN_PROGRAM_ID,
                 account=wsol_token_account,
-                dest=payer_keypair.pubkey(),
-                owner=payer_keypair.pubkey(),
+                dest=sender_address,
+                owner=sender_address,
             )
         )
 
         instructions = [
-            set_compute_unit_limit(UNIT_BUDGET),
-            set_compute_unit_price(UNIT_PRICE),
+            set_compute_unit_limit(gas_config.limit),
+            set_compute_unit_price(gas_config.price),
             create_wsol_account_instruction,
             init_wsol_account_instruction,
         ]
@@ -143,7 +143,7 @@ def buy(
 
         print("Compiling transaction message...")
         compiled_message = MessageV0.try_compile(
-            payer_keypair.pubkey(),
+            sender_address,
             instructions,
             [],
             client.get_latest_blockhash().value.blockhash,
@@ -151,7 +151,7 @@ def buy(
 
         print("Sending transaction...")
         txn_sig = client.send_transaction(
-            txn=VersionedTransaction(compiled_message, [payer_keypair]),
+            txn=VersionedTransaction(compiled_message, [sender]),
             opts=TxOpts(skip_preflight=True),
         ).value
         print(f"Transaction Signature: https://solscan.io/tx/{txn_sig}")
@@ -168,21 +168,18 @@ def buy(
 
 
 def sell(
-    percentage: int = 100,
-    slippage: int = 5,
-    pool_keys: Optional[AmmV4PoolKeys] = None,
-    gas_price_scale: float = 1,
+    client: Client,
+    sender: Keypair,
+    percentage: int,
+    slippage: int,
+    pool_keys: AmmV4PoolKeys,
+    gas_config: GasConfig,
 ) -> bool:
+    sender_address = sender.pubkey()
     try:
         if not (1 <= percentage <= 100):
             print("Percentage must be between 1 and 100.")
             return False
-
-        print("Fetching pool keys...")
-        if pool_keys is None:
-            print("No pool keys found...")
-            return False
-        print("Pool keys fetched successfully.")
 
         mint = (
             pool_keys.base_mint if pool_keys.base_mint != WSOL else pool_keys.quote_mint
@@ -212,20 +209,20 @@ def sell(
 
         amount_in = int(token_balance * 10**token_decimal)
         print(f"Amount In: {amount_in} | Minimum Amount Out: {minimum_amount_out}")
-        token_account = get_associated_token_address(payer_keypair.pubkey(), mint)
+        token_account = get_associated_token_address(sender_address, mint)
 
         print("Generating seed and creating WSOL account...")
         seed = base64.urlsafe_b64encode(os.urandom(24)).decode("utf-8")
         wsol_token_account = Pubkey.create_with_seed(
-            payer_keypair.pubkey(), seed, TOKEN_PROGRAM_ID
+            sender_address, seed, TOKEN_PROGRAM_ID
         )
         balance_needed = Token.get_min_balance_rent_for_exempt_for_account(client)
 
         create_wsol_account_instruction = create_account_with_seed(
             CreateAccountWithSeedParams(
-                from_pubkey=payer_keypair.pubkey(),
+                from_pubkey=sender_address,
                 to_pubkey=wsol_token_account,
-                base=payer_keypair.pubkey(),
+                base=sender_address,
                 seed=seed,
                 lamports=int(balance_needed),
                 space=ACCOUNT_LAYOUT_LEN,
@@ -238,7 +235,7 @@ def sell(
                 program_id=TOKEN_PROGRAM_ID,
                 account=wsol_token_account,
                 mint=WSOL,
-                owner=payer_keypair.pubkey(),
+                owner=sender_address,
             )
         )
 
@@ -249,7 +246,7 @@ def sell(
             token_account_in=token_account,
             token_account_out=wsol_token_account,
             accounts=pool_keys,
-            owner=payer_keypair.pubkey(),
+            owner=sender_address,
         )
 
         print("Preparing to close WSOL account after swap...")
@@ -257,14 +254,14 @@ def sell(
             CloseAccountParams(
                 program_id=TOKEN_PROGRAM_ID,
                 account=wsol_token_account,
-                dest=payer_keypair.pubkey(),
-                owner=payer_keypair.pubkey(),
+                dest=sender_address,
+                owner=sender_address,
             )
         )
 
         instructions = [
-            set_compute_unit_limit(UNIT_BUDGET),
-            set_compute_unit_price(int(UNIT_PRICE * gas_price_scale)),
+            set_compute_unit_limit(gas_config.limit),
+            set_compute_unit_price(gas_config.price),
             create_wsol_account_instruction,
             init_wsol_account_instruction,
             swap_instructions,
@@ -279,15 +276,15 @@ def sell(
                 CloseAccountParams(
                     program_id=TOKEN_PROGRAM_ID,
                     account=token_account,
-                    dest=payer_keypair.pubkey(),
-                    owner=payer_keypair.pubkey(),
+                    dest=sender_address,
+                    owner=sender_address,
                 )
             )
             instructions.append(close_token_account_instruction)
 
         print("Compiling transaction message...")
         compiled_message = MessageV0.try_compile(
-            payer_keypair.pubkey(),
+            sender_address,
             instructions,
             [],
             client.get_latest_blockhash().value.blockhash,
@@ -295,7 +292,7 @@ def sell(
 
         print("Sending transaction...")
         txn_sig = client.send_transaction(
-            txn=VersionedTransaction(compiled_message, [payer_keypair]),
+            txn=VersionedTransaction(compiled_message, [sender]),
             opts=TxOpts(skip_preflight=True),
         ).value
         print(f"Transaction Signature: https://solscan.io/tx/{txn_sig}")

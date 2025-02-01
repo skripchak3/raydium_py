@@ -2,7 +2,6 @@
 
 import asyncio
 import logging
-import random
 import sys
 import webbrowser
 from os import getenv
@@ -16,6 +15,7 @@ from dotenv import load_dotenv
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Confirmed
 from solana.rpc.websocket_api import connect
+from solders.keypair import Keypair
 from solders.pubkey import Pubkey
 from solders.rpc.config import RpcTransactionLogsFilterMentions
 from solders.rpc.responses import (
@@ -23,9 +23,9 @@ from solders.rpc.responses import (
     LogsNotification,
 )
 from solders.token.state import Mint
+from spl.token.constants import WRAPPED_SOL_MINT
 from typing_extensions import Optional
 
-from raydium_py.config import payer_keypair
 from raydium_py.raydium.amm_v4 import buy, sell
 from raydium_py.raydium.constants import RAYDIUM_AMM_V4
 from raydium_py.utils.pool_utils import (
@@ -42,7 +42,7 @@ logger.setLevel(logging.INFO)
 load_dotenv()
 
 # just emulate real buy
-DRY_RUN = False
+DRY_RUN = True
 
 # open browser tab
 OPEN_BROWSER = True
@@ -51,6 +51,7 @@ OPEN_BROWSER = True
 FORCE = False
 
 # buy single on multiple(N) tokens at the same time
+# beta! unstable!
 MULTI_BUY = False
 N = 1
 
@@ -70,6 +71,13 @@ LP_BURNED_CHECK = False
 
 API_KEY = getenv("RPC_API_KEY")
 
+COMMITMENT = Confirmed
+
+PAIR_ADDRESS_IDX = 2
+
+HTTP_URL = "https://mainnet.helius-rpc.com/?api-key={}"
+WS_URL = "wss://mainnet.helius-rpc.com/?api-key={}"
+
 INITIAL_SOL_AMOUNT_PREFIX = "init_pc_amount: "
 INITIAL_SOL_AMOUNT_PREFIX_LEN = len(INITIAL_SOL_AMOUNT_PREFIX)
 INITIAL_COIN_AMOUNT_PREFIX = "init_pc_amount: "
@@ -77,11 +85,6 @@ INITIAL_COIN_AMOUNT_PREFIX_LEN = len(INITIAL_COIN_AMOUNT_PREFIX)
 INITIAL_OPEN_TIME_PREFIX = "open_time: "
 INITIAL_OPEN_TIME_PREFIX_LEN = len(INITIAL_OPEN_TIME_PREFIX)
 
-COMMITMENT = Confirmed
-PAIR_ADDRESS_IDX = 2
-
-HTTP_URL = f"https://mainnet.helius-rpc.com/?api-key={API_KEY}"
-WS_URL = f"wss://mainnet.helius-rpc.com/?api-key={API_KEY}"
 PAIR_CREATED_EVENT = "initialize2"
 PAIR_CREATED_EVENT_LOG = "ray_log"
 
@@ -89,16 +92,22 @@ client = AsyncClient(HTTP_URL)
 
 
 class RaydiumV4Bot:
-    def __init__(self):
-        self.client = AsyncClient(HTTP_URL)
-        self.payer_keypair = payer_keypair
+    def __init__(self, sender: Keypair, api_key: str):
+        self.api_key = api_key
+        self.client = AsyncClient(HTTP_URL.format(api_key))
+
+        self.sender = sender
+        self.me = sender.pubkey()
+
         self.min_amount_in_sol = 200
         self.profit_threshold = 7
+        self.buy_amount_in_sol = 0.01
+
         self.buy_slippage = 50
         self.sell_slippage = 20
-        self.buy_amount_in_sol = 0.01
+
         self.dry_run = DRY_RUN
-        self.check = not True
+        self.check = False
 
     async def loop(self):
         i = 0
@@ -113,7 +122,7 @@ class RaydiumV4Bot:
                     f"Starting with filter for more than {MIN} SOL and profit target {PROFIT}% for {AMOUNT} SOL in {N if MULTI_BUY else 1} buy mode"
                 )
 
-                async with connect(WS_URL) as ws:
+                async with connect(WS_URL.format(self.api_key)) as ws:
                     # subscribe to all events from Raydium V4
                     await ws.logs_subscribe(
                         filter_=RpcTransactionLogsFilterMentions(RAYDIUM_AMM_V4),
@@ -153,7 +162,7 @@ class RaydiumV4Bot:
                                         accounts = (
                                             tx.value.transaction.transaction.message.account_keys
                                         )
-                                    except AttributeError:
+                                    except:
                                         accounts = []
 
                                     if not accounts:
@@ -188,8 +197,7 @@ class RaydiumV4Bot:
 
                                     token_address = (
                                         pool_keys.base_mint
-                                        if str(pool_keys.quote_mint)
-                                        == "So11111111111111111111111111111111111111112"
+                                        if pool_keys.quote_mint == WRAPPED_SOL_MINT
                                         else pool_keys.quote_mint
                                     )
                                     logger.info(
@@ -205,8 +213,8 @@ class RaydiumV4Bot:
 
                                     logger.info(
                                         f"""Me:
-                                        {payer_keypair.pubkey()}
-                                        https://solscan.io/account/{payer_keypair.pubkey()}"""
+                                        {self.me}
+                                        https://solscan.io/account/{self.me}"""
                                     )
                                     logger.info("")
                                     i += 1
@@ -601,7 +609,12 @@ class RaydiumV4Bot:
 
 
 async def main():
-    bot = RaydiumV4Bot()
+    private_key = Keypair.from_base58_string(getenv("PRIVATE_KEY"))
+    print(private_key)
+    rpc_api_key = getenv("RPC_API_KEY")
+    print(rpc_api_key)
+
+    bot = RaydiumV4Bot(private_key, rpc_api_key)
     await bot.loop()
 
 

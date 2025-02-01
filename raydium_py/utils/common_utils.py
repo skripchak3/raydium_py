@@ -1,32 +1,42 @@
 import json
 import time
-from solana.rpc.commitment import Confirmed, Processed
+from pprint import pprint
+from typing import Optional
+
+from solana.rpc.api import Client
+from solana.rpc.commitment import Confirmed, Processed, Commitment
 from solana.rpc.types import TokenAccountOpts
-from solders.signature import Signature  # type: ignore
 from solders.pubkey import Pubkey  # type: ignore
-from raydium_py.config import client, payer_keypair
+from solders.signature import Signature  # type: ignore
 
 
-def get_token_balance(mint_str: str) -> float | None:
+def get_token_balance(
+    client: Client,
+    sender_address: Pubkey,
+    token_address: Pubkey,
+    commitment: Commitment = Processed,
+) -> Optional[float]:
+    try:
+        response = client.get_token_accounts_by_owner_json_parsed(
+            sender_address, TokenAccountOpts(mint=token_address), commitment=commitment
+        )
 
-    mint = Pubkey.from_string(mint_str)
-    response = client.get_token_accounts_by_owner_json_parsed(
-        payer_keypair.pubkey(), TokenAccountOpts(mint=mint), commitment=Processed
-    )
-
-    if response.value:
-        accounts = response.value
-        if accounts:
-            token_amount = accounts[0].account.data.parsed["info"]["tokenAmount"][
+        if accounts := response.value:
+            if token_amount := accounts[0].account.data.parsed["info"]["tokenAmount"][
                 "uiAmount"
-            ]
-            if token_amount:
+            ]:
                 return float(token_amount)
-    return None
+    except Exception as e:
+        print("get_token_balance", e)
+        return None
 
 
 def confirm_txn(
-    txn_sig: Signature, max_retries: int = 10, retry_interval: int = 3
+    client: Client,
+    txn_sig: Signature,
+    max_retries: int = 10,
+    retry_interval: int = 0.5,
+    commitment: Commitment = Confirmed,
 ) -> bool:
     retries = 1
 
@@ -34,10 +44,13 @@ def confirm_txn(
         try:
             txn_res = client.get_transaction(
                 txn_sig,
-                encoding="json",
-                commitment=Confirmed,
+                commitment=commitment,
                 max_supported_transaction_version=0,
             )
+
+            print("CONFIRM")
+            pprint(txn_res)
+            print("CONFIRM")
 
             txn_json = json.loads(txn_res.value.transaction.meta.to_json())
 
