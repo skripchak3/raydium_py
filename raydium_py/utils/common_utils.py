@@ -34,7 +34,7 @@ def get_token_balance(
 def confirm_txn(
     client: Client,
     txn_sig: Signature,
-    max_retries: int = 10,
+    max_retries: int = 20,
     retry_interval: int = 0.5,
     commitment: Commitment = Confirmed,
 ) -> bool:
@@ -48,20 +48,20 @@ def confirm_txn(
                 max_supported_transaction_version=0,
             )
 
-            print("CONFIRM")
-            pprint(txn_res)
-            print("CONFIRM")
+            if txn_res:
+                if txn_res.value:
+                    return True
 
-            txn_json = json.loads(txn_res.value.transaction.meta.to_json())
-
-            if txn_json["err"] is None:
-                print("Transaction confirmed... try count:", retries)
-                return True
-
-            print("Error: Transaction not confirmed. Retrying...")
-            if txn_json["err"]:
-                print("Transaction failed.")
-                return False
+            # txn_json = json.loads(txn_res.value.transaction.meta.to_json())
+            #
+            # if txn_json["err"] is None:
+            #     print("Transaction confirmed... try count:", retries)
+            #     return True
+            #
+            # print("Error: Transaction not confirmed. Retrying...")
+            # if txn_json["err"]:
+            #     print("Transaction failed.")
+            #     return False
         except Exception as e:
             print("Awaiting confirmation... try count:", retries)
             retries += 1

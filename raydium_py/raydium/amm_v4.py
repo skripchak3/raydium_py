@@ -32,9 +32,9 @@ from raydium_py.raydium.constants import (
 from raydium_py.raydium.gas import GasConfig
 from raydium_py.utils.common_utils import confirm_txn, get_token_balance
 from raydium_py.utils.pool_utils import (
-    AmmV4PoolKeys,
     get_amm_v4_reserves,
     make_amm_v4_swap_instruction,
+    AmmV4PoolKeys,
 )
 
 
@@ -55,7 +55,9 @@ def buy(
         print("Calculating transaction amounts...")
         amount_in = int(sol_in * SOL_DECIMAL)
 
-        base_reserve, quote_reserve, token_decimal = get_amm_v4_reserves(pool_keys)
+        base_reserve, quote_reserve, token_decimal = get_amm_v4_reserves(
+            client, pool_keys
+        )
         amount_out = sol_for_tokens(sol_in, base_reserve, quote_reserve)
         print(f"Estimated Amount Out: {amount_out}")
 
@@ -129,8 +131,8 @@ def buy(
         )
 
         instructions = [
-            set_compute_unit_limit(gas_config.limit),
-            set_compute_unit_price(gas_config.price),
+            set_compute_unit_limit(gas_config["limit"]),
+            set_compute_unit_price(gas_config["price"]),
             create_wsol_account_instruction,
             init_wsol_account_instruction,
         ]
@@ -157,13 +159,18 @@ def buy(
         print(f"Transaction Signature: https://solscan.io/tx/{txn_sig}")
 
         print("Confirming transaction...")
-        confirmed = confirm_txn(txn_sig)
+        confirmed = confirm_txn(
+            client=client,
+            txn_sig=txn_sig,
+        )
 
         print("Transaction confirmed:", confirmed)
         return confirmed
 
     except Exception as e:
-        print("Error occurred during transaction:", e)
+
+        print("Error occurred during transaction:", e, type(e))
+        raise e
         return False
 
 
@@ -186,7 +193,9 @@ def sell(
         )
 
         print("Retrieving token balance...")
-        token_balance = get_token_balance(str(mint))
+        token_balance = get_token_balance(
+            client=client, sender_address=sender_address, token_address=mint
+        )
         print("Token Balance:", token_balance)
 
         if token_balance == 0 or token_balance is None:
@@ -199,7 +208,9 @@ def sell(
         )
 
         print("Calculating transaction amounts...")
-        base_reserve, quote_reserve, token_decimal = get_amm_v4_reserves(pool_keys)
+        base_reserve, quote_reserve, token_decimal = get_amm_v4_reserves(
+            client, pool_keys
+        )
         amount_out = tokens_for_sol(token_balance, base_reserve, quote_reserve)
         print(f"Estimated Amount Out: {amount_out}")
 
@@ -260,8 +271,8 @@ def sell(
         )
 
         instructions = [
-            set_compute_unit_limit(gas_config.limit),
-            set_compute_unit_price(gas_config.price),
+            set_compute_unit_limit(gas_config["limit"]),
+            set_compute_unit_price(gas_config["price"]),
             create_wsol_account_instruction,
             init_wsol_account_instruction,
             swap_instructions,
@@ -298,7 +309,10 @@ def sell(
         print(f"Transaction Signature: https://solscan.io/tx/{txn_sig}")
 
         print("Confirming transaction...")
-        confirmed = confirm_txn(txn_sig)
+        confirmed = confirm_txn(
+            client=client,
+            txn_sig=txn_sig,
+        )
 
         print("Transaction confirmed:", confirmed)
         return confirmed
