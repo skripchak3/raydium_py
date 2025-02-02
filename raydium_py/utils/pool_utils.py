@@ -8,6 +8,7 @@ from solana.rpc.commitment import Processed, Commitment
 from solana.rpc.types import MemcmpOpts
 from solders.instruction import AccountMeta, Instruction  # type: ignore
 from solders.pubkey import Pubkey  # type: ignore
+from spl.token.constants import WRAPPED_SOL_MINT
 
 from raydium_py.layouts.amm_v4 import LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3
 from raydium_py.raydium.constants import (
@@ -39,6 +40,24 @@ class AmmV4PoolKeys:
     ray_authority_v4: Pubkey
     open_book_program: Pubkey
     token_program_id: Pubkey
+
+    @property
+    def pair_address(self) -> Pubkey:
+        return self.amm_id
+
+    @property
+    def token_address(self) -> Pubkey:
+        match WRAPPED_SOL_MINT:
+            case self.base_mint:
+                return self.quote_mint
+            case self.quote_mint:
+                return self.base_mint
+            case _:
+                raise NotImplementedError
+
+    @property
+    def lp_token_address(self) -> Pubkey:
+        return self.lp_mint
 
 
 class DIRECTION(Enum):

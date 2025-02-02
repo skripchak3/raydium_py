@@ -171,11 +171,6 @@ class RaydiumV4Bot:
                                         )
 
                                     pair_address = accounts[PAIR_ADDRESS_IDX].pubkey
-                                    logger.info(
-                                        f"""Pair address:
-                                        https://photon-sol.tinyastro.io/en/lp/{pair_address}
-                                        https://dexscreener.com/solana/{pair_address}"""
-                                    )
 
                                     tt = 3
                                     while tt > 0:
@@ -211,13 +206,18 @@ class RaydiumV4Bot:
                                         https://solscan.io/token/{lp_token_address}"""
                                     )
 
+                                    i += 1
+                                    logger.info(
+                                        f"""Pair address:
+                                        https://photon-sol.tinyastro.io/en/lp/{pair_address}
+                                        https://dexscreener.com/solana/{pair_address}"""
+                                    )
                                     logger.info(
                                         f"""Me:
                                         {self.me}
                                         https://solscan.io/account/{self.me}"""
                                     )
                                     logger.info("")
-                                    i += 1
 
                                     if MULTI_BUY:
                                         async with semaphore:
@@ -433,6 +433,7 @@ class RaydiumV4Bot:
             _, _, tb = sys.exc_info()
             print(f"LINE {tb.tb_lineno}")
 
+    # +++
     async def mint_and_freeze_authorities(self, token_address: Pubkey) -> bool:
         k = 2
         n = k
@@ -460,6 +461,7 @@ class RaydiumV4Bot:
             logger.error(f"ERROR WHILE CHECK MINT & FREEZE in {k} retries")
             return False
 
+    # +++
     async def lp_tokens_burned(self, lp_token_address: Pubkey) -> bool:
         n = 2
         while n > 0:
@@ -485,90 +487,14 @@ class RaydiumV4Bot:
         else:
             return False
 
-    async def rug_checker(self, token_address: str):
-        n = 2
-        url = f"https://api.rugcheck.xyz/v1/tokens/{token_address}/report"
-        while n > 0:
-            logger.info(f"Checking {url} ...")
-            check = requests.get(url)
-            logger.info(f"API response: {check.status_code}")
-            if check.status_code == 200:
-                report = check.json()
-                logger.info(report)
-                freeze_authority = report["freezeAuthority"] is None
-
-                mint_authority = report["mintAuthority"] is None
-                lp_burned = report["markets"][0]["lp"]["lpUnlocked"] == 0
-                pprint(report["markets"][0]["lp"])
-                return freeze_authority, mint_authority, lp_burned
-            else:
-                logger.info(f"API returned error: {check.status_code}")
-
-            await asyncio.sleep(1)
-            n -= 1
-
+    # +++
     async def current_price_and_amount_in_sol(
         self,
         pool_keys: Optional[AmmV4PoolKeys],
     ) -> Optional[tuple[float, float]]:
-        (quote_amount, base_amount, _) = get_amm_v4_reserves(pool_keys)
+        return None
 
-        if not (quote_amount and base_amount):
-            return None
-
-        logger.debug(f"QUOTE {quote_amount}")
-        assert quote_amount != 0
-
-        current_price = base_amount / quote_amount
-        return current_price, round(base_amount, 2)
-
-    def initial_amount_in_sol(self, pool_created_log: str) -> Optional[float]:
-        try:
-            logger.debug(pool_created_log)
-            open_time_start = pool_created_log.find(INITIAL_OPEN_TIME_PREFIX)
-            open_time_end = pool_created_log.find(",", open_time_start)
-            open_time_timestamp = int(
-                pool_created_log[
-                    open_time_start + INITIAL_OPEN_TIME_PREFIX_LEN : open_time_end
-                ]
-            )
-
-            logger.debug("OPEN TIME", open_time_timestamp)
-            if not open_time_timestamp:
-                return None
-
-            amount_start = pool_created_log.find(INITIAL_SOL_AMOUNT_PREFIX)
-            amount_end = pool_created_log.find(",", amount_start)
-            initial_amount_in_lamports = int(
-                pool_created_log[
-                    amount_start + INITIAL_SOL_AMOUNT_PREFIX_LEN : amount_end
-                ]
-            )
-            initial_amount_in_sol = initial_amount_in_lamports / 1e9
-
-            if True:
-                coin_start = pool_created_log.find(INITIAL_OPEN_TIME_PREFIX)
-                coin_end = pool_created_log.find(",", coin_start)
-                coin_amount = int(
-                    pool_created_log[
-                        coin_start + INITIAL_COIN_AMOUNT_PREFIX_LEN : coin_end
-                    ]
-                )
-                coin_amount_in_sol = coin_amount / 1e6
-
-                logger.debug(f"SOL AMOUNT {initial_amount_in_sol:.2f}")
-                logger.debug(f"COIN AMOUNT {coin_amount_in_sol:.18f}")
-
-                ini_price = coin_amount_in_sol / initial_amount_in_sol
-
-                logger.debug(f"INI PRICE {ini_price:.18f}")
-
-            return initial_amount_in_sol
-
-        except Exception as e:
-            logger.warning(e)
-            return None
-
+    # +++
     async def try_buy(
         self,
         pool_keys: AmmV4PoolKeys,
@@ -585,6 +511,7 @@ class RaydiumV4Bot:
         except:
             return False
 
+    # +++
     async def try_sell(
         self,
         pool_keys: AmmV4PoolKeys,
