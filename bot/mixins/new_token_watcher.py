@@ -26,7 +26,24 @@ class NewTokenWatcher:
         except:
             return False
 
-    async def get_transaction_accounts(self, tx_hash: Signature) -> Optional[list[str]]:
+    def get_transaction_accounts(self, tx_hash: Signature) -> Optional[list[str]]:
+        try:
+            tx = self.client.get_transaction(
+                tx_hash,
+                commitment=self.commitment,
+                encoding="jsonParsed",
+                max_supported_transaction_version=1,
+            )
+            return tx.value.transaction.transaction.message.account_keys
+        except Exception as e:
+            traceback.print_exc()
+            print(f"Type: {type(e)}")
+            print(f"Message: {e}")
+            return None
+
+    async def get_transaction_accounts_async(
+        self, tx_hash: Signature
+    ) -> Optional[list[str]]:
         try:
             tx = await self.async_client.get_transaction(
                 tx_hash,
@@ -99,9 +116,7 @@ class NewTokenWatcher:
                                 )
 
                                 if not (
-                                    accounts := await self.get_transaction_accounts(
-                                        tx_hash
-                                    )
+                                    accounts := self.get_transaction_accounts(tx_hash)
                                 ):
                                     self.info(
                                         "Unknown transaction. No accounts. Skipping..."
