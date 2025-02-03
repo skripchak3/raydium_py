@@ -68,7 +68,7 @@ class RaydiumBot(
         self.swap_fee = 0.25  # need to figure out
         self.tick = 0.25  # check price every X seconds
 
-        self.dry_run = True
+        self.dry_run = False
         self.beep = True
         self.browser = False
 

@@ -1,6 +1,4 @@
-import json
 import time
-from pprint import pprint
 from typing import Optional
 
 from solana.rpc.api import Client
@@ -35,7 +33,7 @@ def confirm_txn(
     client: Client,
     txn_sig: Signature,
     max_retries: int = 20,
-    retry_interval: int = 0.5,
+    retry_interval: int = 1,
     commitment: Commitment = Confirmed,
 ) -> bool:
     retries = 1
@@ -48,20 +46,16 @@ def confirm_txn(
                 max_supported_transaction_version=0,
             )
 
-            if txn_res:
-                if txn_res.value:
-                    return True
+            tx_err = txn_res.value.transaction.meta.err
 
-            # txn_json = json.loads(txn_res.value.transaction.meta.to_json())
-            #
-            # if txn_json["err"] is None:
-            #     print("Transaction confirmed... try count:", retries)
-            #     return True
-            #
-            # print("Error: Transaction not confirmed. Retrying...")
-            # if txn_json["err"]:
-            #     print("Transaction failed.")
-            #     return False
+            if tx_err is None:
+                print("Transaction confirmed... try count:", retries)
+                return True
+
+            print("Error: Transaction not confirmed. Retrying...")
+            if tx_err:
+                print("Transaction failed.")
+                return False
         except Exception as e:
             print("Awaiting confirmation... try count:", retries)
             retries += 1

@@ -37,6 +37,7 @@ class SingleTokenWatcher:
 
         pool_state = None
 
+        i = 1
         number_of_tries_to_sell = 0
         while op != Op.EXIT:
             match op:
@@ -53,7 +54,7 @@ class SingleTokenWatcher:
 
                 case Op.SHOULD_BUY:
                     pool_state = self.get_pool_state(self.client, pool_keys)
-                    await self.macd()
+                    # await self.macd()
                     self.info(f"POOL STATE: {pool_state}")
                     if pool_state.quote_reserve >= min_amount_in_sol:
                         self.info(
@@ -76,7 +77,7 @@ class SingleTokenWatcher:
                     if await self.buy(pool_keys, buy_params):
                         self.info(">>> BOUGHT")
                         pool_state = self.get_pool_state(self.client, pool_keys)
-                        await self.macd()
+                        # await self.macd()
                         bought_price = pool_state.quote_price
                         self.bought_beeper()
                         self.open_browser(pool_keys.pair_address)
@@ -89,7 +90,7 @@ class SingleTokenWatcher:
 
                 case Op.SHOULD_SELL:
                     pool_state = self.get_pool_state(self.client, pool_keys)
-                    await self.macd()
+                    # await self.macd()
 
                     if not pool_state:
                         self.info(
@@ -102,7 +103,7 @@ class SingleTokenWatcher:
                         profit = round(profit, self.profit_precision)
 
                         self.info(
-                            f"{pool_keys.token_address}  [{pool_state.quote_reserve:7.2f} SOL]  {{{current_price:.{self.price_precision}f}}}  ({profit:.{self.profit_precision}f}%/{take_profit:.{self.profit_precision}f}%)"
+                            f"#{i:03d} {pool_keys.token_address} [{pool_state.quote_reserve:7.2f} SOL]  {{{current_price:.{self.price_precision}f}}}  ({profit:.{self.profit_precision}f}%/{take_profit:.{self.profit_precision}f}%)"
                         )
 
                         if profit >= take_profit:
@@ -120,10 +121,11 @@ class SingleTokenWatcher:
                     number_of_tries_to_sell += 1
                     self.info(f"Number of tries to sell: {number_of_tries_to_sell}")
                     if await self.sell(pool_keys, sell_params):
+                        i += 1
                         number_of_tries_to_sell = 0
                         self.info("<<< SOLD")
                         pool_state = self.get_pool_state(self.client, pool_keys)
-                        await self.macd()
+                        # await self.macd()
                         sold_price = pool_state.quote_price
                         self.sold_beeper()
                         self.info(

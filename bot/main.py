@@ -11,7 +11,7 @@ from raydium_py.utils.pool_utils import fetch_amm_v4_pool_keys
 async def main():
     bot = RaydiumBot()
 
-    pair_address = "2K9bC1TiRiPKP6DXnsLbM1LmhecK4xHXPotHET2tpP1J"
+    pair_address = "8k56KmRLWNZpa8nKNpnhmjC5NcEMBbgrZUxXyHATMt5m"
     pool_keys = fetch_amm_v4_pool_keys(bot.client, Pubkey.from_string(pair_address))
 
     if not pool_keys:
@@ -22,8 +22,8 @@ async def main():
 
     await bot.watch_single(
         pool_keys=pool_keys,
-        buy_amount_in_sol=0.01,
-        # sell_amount_in_percent=profit,
+        buy_amount_in_sol=0.08,
+        # sell_amount_in_percent=100,
         sell_amount_in_percent=profit,
         min_amount_in_sol=450,
         take_profit=profit,
