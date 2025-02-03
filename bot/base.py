@@ -10,6 +10,7 @@ from bot.mixins.browser_opener import BrowserOpenerMixin
 from bot.mixins.buyer import BuyerMixin
 from bot.mixins.checker import CheckerMixin
 from bot.mixins.logger import LoggerMixin
+from bot.mixins.new_token_watcher import NewTokenWatcher
 from bot.mixins.pool_keys import PoolKeysMixin
 from bot.mixins.pool_state import PoolStateMixin
 from bot.mixins.seller import SellerMixin
@@ -28,6 +29,7 @@ class RaydiumBot(
     SellerMixin,
     LoggerMixin,
     SingleTokenWatcher,
+    NewTokenWatcher,
     BeeperMixin,
     BrowserOpenerMixin,
 ):
@@ -48,6 +50,7 @@ class RaydiumBot(
             self.info(f"Started with args {args}")
 
         self.sender = Keypair.from_base58_string(args.private_key)
+        self.me = self.sender.pubkey()
         self.http_endpoint = args.http_url.format(api_key=args.api_key)
         self.ws_endpoint = args.ws_url.format(api_key=args.api_key)
         self.commitment = Commitment(args.commitment)
@@ -68,7 +71,7 @@ class RaydiumBot(
         self.swap_fee = 0.25  # need to figure out
         self.tick = 0.25  # check price every X seconds
 
-        self.dry_run = False
+        self.dry_run = True
         self.beep = True
         self.browser = False
 

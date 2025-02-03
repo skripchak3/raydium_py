@@ -37,12 +37,28 @@ class SingleTokenWatcher:
 
         pool_state = None
 
+        self.info(
+            f"""Token address:
+                    https://solscan.io/token/{pool_keys.token_address}"""
+        )
+
+        self.info(
+            f"""Pair address:
+                    https://photon-sol.tinyastro.io/en/lp/{pool_keys.pair_address}
+                    https://dexscreener.com/solana/{pool_keys.pair_address}"""
+        )
+        self.info(
+            f"""Me:
+                    {self.me}
+                    https://solscan.io/account/{self.me}"""
+        )
+        self.info("")
         i = 1
         number_of_tries_to_sell = 0
         while op != Op.EXIT:
             match op:
                 case Op.CHECK:
-                    if self.check_all(
+                    if await self.check_all(
                         self.async_client,
                         pool_keys.token_address,
                         pool_keys.lp_token_address,
