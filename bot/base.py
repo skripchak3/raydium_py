@@ -1,3 +1,4 @@
+import pandas
 from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
@@ -65,8 +66,10 @@ class RaydiumBot(
         self.amount_precision = 2
 
         self.swap_fee = 0.25  # need to figure out
-        self.tick = 1  # check price every X seconds
+        self.tick = 0.25  # check price every X seconds
 
-        self.dry_run = False
+        self.dry_run = True
         self.beep = True
-        self.browser = True
+        self.browser = False
+
+        self.prices = pandas.Series(data=[], index=[])
