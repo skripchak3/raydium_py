@@ -29,14 +29,14 @@ class ArgsParser:
         parser.add_argument(
             "--dry-run",
             action="store_true",
-            default=True,
-            help="Enable DRY_RUN mode (default: True).",
+            default=False,
+            help="Enable DRY_RUN mode (default: False).",
         )
         parser.add_argument(
             "--open-browser",
             action="store_true",
-            default=True,
-            help="Enable OPEN_BROWSER (default: True).",
+            default=False,
+            help="Enable OPEN_BROWSER (default: False).",
         )
         # parser.add_argument(
         #     "--multi-buy",
@@ -53,38 +53,38 @@ class ArgsParser:
         parser.add_argument(
             "--beep",
             action="store_true",
-            default=True,
-            help="Enable BEEP (default: True).",
+            default=False,
+            help="Enable BEEP (default: False).",
         )
         parser.add_argument(
             "--check",
             action="store_true",
-            default=False,
-            help="CHECK (default: False).",
+            default=True,
+            help="CHECK (default: True).",
         )
         parser.add_argument(
             "--min",
             type=float,
-            default=180.0,
-            help="MIN (default: 180.0).",
+            default=1450.0,
+            help="MIN (default: 1450.0).",
         )
         parser.add_argument(
             "--take-profit",
             type=float,
-            default=3.9,
-            help="TAKE PROFIT (default: 3.9).",
+            default=5.0,
+            help="TAKE PROFIT (default: 5.0).",
         )
         parser.add_argument(
             "--stop-loss",
             type=float,
-            default=-60.0,
-            help="STOP LOSS (default: -60.0).",
+            default=-30.0,
+            help="STOP LOSS (default: -30.0).",
         )
         parser.add_argument(
             "--amount",
             type=float,
-            default=0.02,
-            help="AMOUNT (default: 0.02).",
+            default=0.05,
+            help="AMOUNT (default: 0.05).",
         )
         parser.add_argument(
             "--buy-slippage",
