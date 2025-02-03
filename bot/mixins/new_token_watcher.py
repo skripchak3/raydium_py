@@ -10,8 +10,7 @@ from solders.solders import (
     Pubkey,
 )
 
-from bot.ops import Op
-from main_loop import PAIR_CREATED_EVENT, PAIR_ADDRESS_IDX
+from ops import Op
 from raydium_py.raydium.constants import RAYDIUM_AMM_V4
 from raydium_py.utils.pool_utils import AmmV4PoolKeys, fetch_amm_v4_pool_keys
 

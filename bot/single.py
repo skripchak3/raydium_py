@@ -3,8 +3,8 @@ import asyncio
 import uvloop
 from solders.solders import Pubkey
 
-from bot.base import RaydiumBot
-from bot.ops import Op
+from base import RaydiumBot
+from ops import Op
 from raydium_py.utils.pool_utils import fetch_amm_v4_pool_keys
 
 

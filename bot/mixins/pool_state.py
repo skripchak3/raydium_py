@@ -1,8 +1,6 @@
-import time
 from dataclasses import dataclass
 from typing import Optional
 
-import pandas
 from solana.rpc.api import Client
 
 from raydium_py.utils.pool_utils import AmmV4PoolKeys, get_amm_v4_reserves
@@ -30,13 +28,6 @@ class PoolStateMixin:
 
         if not (base_reserve and quote_reserve):
             return None
-
-        price = quote_reserve / base_reserve
-        timestamp = int(time.time() * 1000)
-
-        self.prices = pandas.concat(
-            [self.prices, pandas.Series([price], index=[timestamp])]
-        )
 
         return PoolState(
             base_reserve=base_reserve,

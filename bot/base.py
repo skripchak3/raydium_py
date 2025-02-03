@@ -1,20 +1,19 @@
-import pandas
 from solana.rpc.api import Client
 from solana.rpc.async_api import AsyncClient
 from solana.rpc.commitment import Commitment
-from solders.solders import Keypair
 
-from bot.mixins.args_parser import ArgsParser
-from bot.mixins.beeper import BeeperMixin
-from bot.mixins.browser_opener import BrowserOpenerMixin
-from bot.mixins.buyer import BuyerMixin
-from bot.mixins.checker import CheckerMixin
-from bot.mixins.logger import LoggerMixin
-from bot.mixins.new_token_watcher import NewTokenWatcher
-from bot.mixins.pool_keys import PoolKeysMixin
-from bot.mixins.pool_state import PoolStateMixin
-from bot.mixins.seller import SellerMixin
-from bot.mixins.single_token_watcher import SingleTokenWatcher
+from solders.solders import Keypair
+from mixins.args_parser import ArgsParser
+from mixins.beeper import BeeperMixin
+from mixins.browser_opener import BrowserOpenerMixin
+from mixins.buyer import BuyerMixin
+from mixins.checker import CheckerMixin
+from mixins.logger import LoggerMixin
+from mixins.new_token_watcher import NewTokenWatcher
+from mixins.pool_keys import PoolKeysMixin
+from mixins.pool_state import PoolStateMixin
+from mixins.seller import SellerMixin
+from mixins.single_token_watcher import SingleTokenWatcher
 from raydium_py.raydium.gas import GasConfig
 
 DEBUG = True
@@ -74,5 +73,3 @@ class RaydiumBot(
         self.dry_run = True
         self.beep = True
         self.browser = False
-
-        self.prices = pandas.Series(data=[], index=[])

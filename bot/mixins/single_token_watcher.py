@@ -1,10 +1,8 @@
 import asyncio
 
-import pandas
-
-from bot.mixins.buyer import BuyParams
-from bot.mixins.seller import SellParams
-from bot.ops import Op
+from mixins.buyer import BuyParams
+from mixins.seller import SellParams
+from ops import Op
 from raydium_py.utils.pool_utils import AmmV4PoolKeys
 
 
@@ -165,55 +163,3 @@ class SingleTokenWatcher:
 
                 case Op.EXIT:
                     return
-
-    async def macd(self):
-        # Print the first few entries to verify
-        # Now, let's calculate the MACD indicator (you'll need the TA-Lib library for this or implement it manually)
-        # Here's a manual implementation for demonstration:
-
-        # MACD parameters
-        short_window = 12
-        long_window = 26
-        signal_window = 9
-
-        # Calculate the short and long EMAs
-        short_ema = self.prices.ewm(span=short_window, adjust=False).mean()
-        long_ema = self.prices.ewm(span=long_window, adjust=False).mean()
-
-        # Calculate MACD line and signal line
-        macd_line = short_ema - long_ema
-        signal_line = macd_line.ewm(span=signal_window, adjust=False).mean()
-
-        curr_diff = macd_line - signal_line
-        prev_diff = curr_diff.shift(1)
-
-        prev_lt_zero = prev_diff < 0
-        curr_gt_zero = curr_diff > 0
-
-        prev_gt_zero = prev_diff > 0
-        curr_lt_zero = curr_diff < 0
-
-        buy_signal = curr_gt_zero & prev_lt_zero
-        sell_signal = curr_lt_zero & prev_gt_zero
-
-        # Create a DataFrame for visualization or further analysis
-        macd_df = pandas.DataFrame(
-            {
-                "Price": self.prices,
-                "MACD": macd_line,
-                "Signal": signal_line,
-                "BUY": buy_signal,
-                "SELL": sell_signal,
-            }
-        )
-
-        if buy_signal.iloc[-1]:
-            print("BUY")
-        if sell_signal.iloc[-1]:
-            print("SELL")
-
-        # print("BUY = {} | SELL = {}".format(buy_signal.iloc[-1], sell_signal.iloc[-1]))
-        pandas.options.display.float_format = "{:.9f}".format
-
-        # Display the last few entries of the MACD DataFrame
-        # print(macd_df.tail())

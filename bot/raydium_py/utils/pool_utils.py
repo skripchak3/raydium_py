@@ -10,7 +10,10 @@ from solders.instruction import AccountMeta, Instruction  # type: ignore
 from solders.pubkey import Pubkey  # type: ignore
 from spl.token.constants import WRAPPED_SOL_MINT
 
-from raydium_py.layouts.amm_v4 import LIQUIDITY_STATE_LAYOUT_V4, MARKET_STATE_LAYOUT_V3
+from raydium_py.layouts.amm_v4 import (
+    LIQUIDITY_STATE_LAYOUT_V4,
+    MARKET_STATE_LAYOUT_V3,
+)
 from raydium_py.raydium.constants import (
     WSOL,
     RAYDIUM_AMM_V4,
