@@ -11,7 +11,10 @@ from raydium_py.utils.pool_utils import fetch_amm_v4_pool_keys
 async def main():
     bot = RaydiumBot()
 
-    pair_address = "GHmy3pYywxAPj5dyuwCdpxA3c1XTeo3JGZnPjtXrntvD"
+    pair_address = ""
+    if not pair_address:
+        raise Exception("no pair address provided")
+
     pool_keys = fetch_amm_v4_pool_keys(bot.client, Pubkey.from_string(pair_address))
 
     if not pool_keys:
@@ -28,6 +31,7 @@ async def main():
         min_amount_in_sol=450,
         take_profit=profit,
         stop_loss=-30.0,
+        delay=0,
         op=Op.SELL,
     )
 

@@ -11,11 +11,12 @@ async def main():
     profit = 5.0
 
     await bot.watch_new_tokens(
-        buy_amount_in_sol=0.1,
+        buy_amount_in_sol=0.05,
         sell_amount_in_percent=profit,
         min_amount_in_sol=1450,
         take_profit=profit,
         stop_loss=-30.0,
+        delay=30.0,
         op=Op.CHECK,
     )
 

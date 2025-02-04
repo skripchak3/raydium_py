@@ -157,7 +157,7 @@ class SingleTokenWatcher:
                         else:
                             op = Op.SHOULD_SELL
 
-                    if number_of_tries_to_sell > 3:
+                    if number_of_tries_to_sell > 1:
                         self.info(
                             f"Failed to sell {number_of_tries_to_sell} times. Saved as memories."
                         )

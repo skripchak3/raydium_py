@@ -76,14 +76,12 @@ class NewTokenWatcher:
         stop_loss: float,
         buy_slippage: int = 50,
         sell_slippage: int = 99,
+        delay: float = 30.0,
         op: Op = Op.CHECK,
     ):
         while True:
             self.info(
-                f"Filter > {min_amount_in_sol} SOL\n"
-                f"Take profit {take_profit}%\n"
-                f"Stop lost {stop_loss}%\n"
-                f"Buy amount {buy_amount_in_sol} SOL\n"
+                f"Filter [AMOUNT {min_amount_in_sol:.2f} SOL] [TAKE {take_profit:+4.1f}%] [STOP {stop_loss:+4.1f}%] [BUY {buy_amount_in_sol:.2f} SOL]"
             )
 
             try:
@@ -141,6 +139,7 @@ class NewTokenWatcher:
                                     stop_loss=stop_loss,
                                     buy_slippage=buy_slippage,
                                     sell_slippage=sell_slippage,
+                                    delay=delay,
                                     op=op,
                                 )
 

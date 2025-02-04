@@ -235,7 +235,7 @@ def get_amm_v4_reserves(client: Client, pool_keys: AmmV4PoolKeys) -> tuple:
         return base_reserve, quote_reserve, token_decimal
 
     except Exception as e:
-        print(f"Error occurred: {e}")
+        print(f"Error occurred: {type(e)}")
         return None, None, None
 
 
