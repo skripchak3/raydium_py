@@ -1,6 +1,11 @@
+import asyncio
+import time
 import traceback
 from typing import Optional
 
+from ops import Op
+from raydium_py.raydium.constants import RAYDIUM_AMM_V4
+from raydium_py.utils.pool_utils import AmmV4PoolKeys, fetch_amm_v4_pool_keys
 from solana.rpc.websocket_api import connect
 from solders.solders import (
     RpcTransactionLogsFilterMentions,
@@ -9,10 +14,6 @@ from solders.solders import (
     Signature,
     Pubkey,
 )
-
-from ops import Op
-from raydium_py.raydium.constants import RAYDIUM_AMM_V4
-from raydium_py.utils.pool_utils import AmmV4PoolKeys, fetch_amm_v4_pool_keys
 
 
 class NewTokenWatcher:
@@ -80,12 +81,13 @@ class NewTokenWatcher:
         op: Op = Op.CHECK,
     ):
         while True:
-            self.info(
-                f"Filter [AMOUNT {min_amount_in_sol:.2f} SOL] [TAKE {take_profit:+4.1f}%] [STOP {stop_loss:+4.1f}%] [BUY {buy_amount_in_sol:.2f} SOL]"
-            )
-
             try:
+                self.info(
+                    f"Filter [AMOUNT {min_amount_in_sol:.2f} SOL] [TAKE {take_profit:+4.1f}%] [STOP {stop_loss:+4.1f}%] [BUY {buy_amount_in_sol:.2f} SOL]"
+                )
+
                 async with connect(self.ws_endpoint) as ws:
+                    start = time.time()
                     # subscribe to all events from Raydium V4
                     await ws.logs_subscribe(
                         filter_=RpcTransactionLogsFilterMentions(RAYDIUM_AMM_V4),
@@ -120,27 +122,28 @@ class NewTokenWatcher:
                                     )
                                     continue
 
-                                if not (
-                                    pool_keys := self.get_pool_keys(
-                                        accounts[PAIR_ADDRESS_IDX].pubkey
-                                    )
-                                ):
+                                pair_address = accounts[PAIR_ADDRESS_IDX].pubkey
+
+                                if not (pool_keys := self.get_pool_keys(pair_address)):
                                     self.info(
                                         "Unknown transaction. No pool keys. Skipping..."
                                     )
                                     continue
 
-                                await self.watch_single(
-                                    pool_keys=pool_keys,
-                                    buy_amount_in_sol=buy_amount_in_sol,
-                                    sell_amount_in_percent=sell_amount_in_percent,
-                                    min_amount_in_sol=min_amount_in_sol,
-                                    take_profit=take_profit,
-                                    stop_loss=stop_loss,
-                                    buy_slippage=buy_slippage,
-                                    sell_slippage=sell_slippage,
-                                    delay=delay,
-                                    op=op,
+                                asyncio.create_task(
+                                    self.watch_single(
+                                        pool_keys=pool_keys,
+                                        buy_amount_in_sol=buy_amount_in_sol,
+                                        sell_amount_in_percent=sell_amount_in_percent,
+                                        min_amount_in_sol=min_amount_in_sol,
+                                        take_profit=take_profit,
+                                        stop_loss=stop_loss,
+                                        buy_slippage=buy_slippage,
+                                        sell_slippage=sell_slippage,
+                                        delay=delay,
+                                        op=op,
+                                    ),
+                                    name=f"https://photon-sol.tinyastro.io/en/lp/{pair_address}",
                                 )
 
                                 self.info("")
@@ -150,3 +153,10 @@ class NewTokenWatcher:
 
             except KeyboardInterrupt:
                 return
+            except Exception as e:
+                end = time.time()
+                duration = end - start
+                traceback.print_exc()
+                print(f"Time: {duration:.2f}s")
+                print(f"Type: {type(e)}")
+                print(f"Message: {e}")
