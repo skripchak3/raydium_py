@@ -129,4 +129,11 @@ class ArgsParser:
             help='WS_URL (default: "wss://mainnet.helius-rpc.com/?api-key={}")',
         )
 
+        parser.add_argument(
+            "--delay",
+            type=float,
+            default=30.0,
+            help="Delay in seconds before each check cycle (default: 30.0)",
+        )
+
         return parser.parse_args()
