@@ -19,6 +19,7 @@ class SingleTokenWatcher:
         stop_loss: float,
         buy_slippage: int = 50,
         sell_slippage: int = 99,
+        delay: float = 30.0,
         op: Op = Op.CHECK,
     ):
 
@@ -58,6 +59,7 @@ class SingleTokenWatcher:
         while op != Op.EXIT:
             match op:
                 case Op.CHECK:
+                    await asyncio.sleep(delay)
                     if await self.check_all(
                         self.async_client,
                         pool_keys.token_address,
