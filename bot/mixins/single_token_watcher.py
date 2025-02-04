@@ -19,8 +19,8 @@ class SingleTokenWatcher:
         stop_loss: float,
         buy_slippage: int = 50,
         sell_slippage: int = 99,
+        delay: float = 30.0,
         op: Op = Op.CHECK,
-        delay: float = 30.0
     ):
 
         buy_params = BuyParams(
