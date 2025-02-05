@@ -205,7 +205,7 @@ def sell(
         
         
         token_balance = initial_token_balance * (percentage / 100)
-        if current_token_balance < token_balance:
+        if current_token_balance < token_balance or percentage == 100:
             token_balance = current_token_balance
         
         print(
