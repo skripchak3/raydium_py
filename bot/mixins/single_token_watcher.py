@@ -57,7 +57,11 @@ class SingleTokenWatcher:
         while op != Op.EXIT:
             match op:
                 case Op.CHECK:
+                    if delay:
+                        self.info(f"Waiting {delay} seconds before checking.")
+
                     await asyncio.sleep(delay)
+
                     if await self.check_all(
                         self.async_client,
                         pool_keys.token_address,

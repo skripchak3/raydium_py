@@ -14,15 +14,21 @@ from solders.solders import (
     Pubkey,
 )
 
+PAIR_CREATED_EVENT = "initialize2"
+
 
 class NewTokenWatcher:
 
-    def is_pair_created(self, message) -> bool:
+    def is_pair_created(
+        self,
+        message,
+    ) -> bool:
         try:
             return any(
                 log for log in message.result.value.logs if PAIR_CREATED_EVENT in log
             )
         except:
+            print(traceback.format_exc())
             return False
 
     def get_transaction_accounts(self, tx_hash: Signature) -> Optional[list[str]]:
@@ -80,10 +86,12 @@ class NewTokenWatcher:
         op: Op = Op.CHECK,
     ):
         tasks = set()
+        max_task_count = 3
+
         while True:
             try:
                 self.info(
-                    f"Filter [AMOUNT {min_amount_in_sol:.2f} SOL] [TAKE {take_profit:+4.1f}%] [STOP {stop_loss:+4.1f}%] [BUY {buy_amount_in_sol:.2f} SOL]"
+                    f"Filter{' [DRY-RUN]' if self.dry_run else ''} [AMOUNT {min_amount_in_sol:.2f} SOL] [TAKE {take_profit:+4.1f}%] [STOP {stop_loss:+4.1f}%] [BUY {buy_amount_in_sol:.2f} SOL]"
                 )
 
                 async with connect(self.ws_endpoint) as ws:
@@ -110,7 +118,7 @@ class NewTokenWatcher:
                                 tx_hash = message.result.value.signature
                                 self.info(
                                     f"""Pair created:
-                                            https://solscan.io/tx/{tx_hash}"""
+                                    https://solscan.io/tx/{tx_hash}"""
                                 )
 
                                 if not (
@@ -121,12 +129,16 @@ class NewTokenWatcher:
                                     )
                                     continue
 
-                                pair_address = accounts[PAIR_ADDRESS_IDX].pubkey
+                                pair_address = accounts[self.pair_address_idx].pubkey
 
                                 if not (pool_keys := self.get_pool_keys(pair_address)):
                                     self.info(
                                         "Unknown transaction. No pool keys. Skipping..."
                                     )
+                                    continue
+
+                                if len(tasks) >= max_task_count:
+                                    self.info("Queue is full. Skipping...")
                                     continue
 
                                 task = asyncio.create_task(

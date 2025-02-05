@@ -9,7 +9,7 @@ from raydium_py.utils.pool_utils import fetch_amm_v4_pool_keys
 
 
 async def main():
-    bot = RaydiumBot()
+    bot = RaydiumBot(dry_run=False, private_key=None)
 
     pair_address = ""
     if not pair_address:
@@ -25,14 +25,14 @@ async def main():
 
     await bot.watch_single(
         pool_keys=pool_keys,
-        buy_amount_in_sol=0.05,
-        sell_amount_in_percent=100,
-        # sell_amount_in_percent=profit,
+        buy_amount_in_sol=0.01,
+        # sell_amount_in_percent=100,
+        sell_amount_in_percent=profit,
         min_amount_in_sol=450,
         take_profit=profit,
         stop_loss=-30.0,
         delay=0,
-        op=Op.SELL,
+        op=Op.BUY,
     )
 
 

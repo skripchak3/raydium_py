@@ -7,7 +7,7 @@ from ops import Op
 
 
 async def main():
-    bot = RaydiumBot()
+    bot = RaydiumBot(dry_run=True, private_key=None)
     profit = 5.0
 
     await bot.watch_new_tokens(
@@ -16,7 +16,7 @@ async def main():
         min_amount_in_sol=1450,
         take_profit=profit,
         stop_loss=-30.0,
-        delay=30.0,
+        delay=1.0,
         op=Op.CHECK,
     )
 

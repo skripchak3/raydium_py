@@ -32,7 +32,7 @@ class RaydiumBot(
     BeeperMixin,
     BrowserOpenerMixin,
 ):
-    def __init__(self):
+    def __init__(self, dry_run=None, private_key=None):
         super().__init__()
         self.init_logger()
 
@@ -48,7 +48,7 @@ class RaydiumBot(
             args.api_key = getenv("RPC_API_KEY")
             self.info(f"Started with args {args}")
 
-        self.sender = Keypair.from_base58_string(args.private_key)
+        self.sender = Keypair.from_base58_string(private_key or args.private_key)
         self.me = self.sender.pubkey()
         self.http_endpoint = args.http_url.format(api_key=args.api_key)
         self.ws_endpoint = args.ws_url.format(api_key=args.api_key)
@@ -61,6 +61,8 @@ class RaydiumBot(
             endpoint=self.http_endpoint, commitment=self.commitment, timeout=2
         )
 
+        self.pair_address_idx = args.pair_address_idx
+
         self.gas_config = GasConfig(limit=100_000, price=args.gas_price)
 
         self.profit_precision = 3
@@ -70,6 +72,6 @@ class RaydiumBot(
         self.swap_fee = 0.25  # need to figure out
         self.tick = 0.25  # check price every X seconds
 
-        self.dry_run = False
-        self.beep = True
+        self.dry_run = args.dry_run
+        self.beep = False
         self.browser = False

@@ -79,14 +79,26 @@ def fetch_amm_v4_pool_keys(
         return struct.pack("<Q", value)
 
     try:
-        amm_data = client.get_account_info_json_parsed(
-            amm_id, commitment=commitment
-        ).value.data
+        amm_data = (
+            (
+                value := client.get_account_info_json_parsed(
+                    amm_id, commitment=commitment
+                ).value
+            )
+            and value
+            and value.data
+        )
         amm_data_decoded = LIQUIDITY_STATE_LAYOUT_V4.parse(amm_data)
         marketId = Pubkey.from_bytes(amm_data_decoded.serumMarket)
-        marketInfo = client.get_account_info_json_parsed(
-            marketId, commitment=commitment
-        ).value.data
+        marketInfo = (
+            (
+                value := client.get_account_info_json_parsed(
+                    marketId, commitment=commitment
+                ).value
+            )
+            and value
+            and value.data
+        )
         market_decoded = MARKET_STATE_LAYOUT_V3.parse(marketInfo)
         vault_signer_nonce = market_decoded.vault_signer_nonce
 
