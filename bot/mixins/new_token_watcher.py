@@ -1,5 +1,4 @@
 import asyncio
-import time
 import traceback
 from typing import Optional
 
@@ -80,6 +79,7 @@ class NewTokenWatcher:
         delay: float = 30.0,
         op: Op = Op.CHECK,
     ):
+        tasks = set()
         while True:
             try:
                 self.info(
@@ -87,7 +87,6 @@ class NewTokenWatcher:
                 )
 
                 async with connect(self.ws_endpoint) as ws:
-                    start = time.time()
                     # subscribe to all events from Raydium V4
                     await ws.logs_subscribe(
                         filter_=RpcTransactionLogsFilterMentions(RAYDIUM_AMM_V4),
@@ -130,7 +129,7 @@ class NewTokenWatcher:
                                     )
                                     continue
 
-                                asyncio.create_task(
+                                task = asyncio.create_task(
                                     self.watch_single(
                                         pool_keys=pool_keys,
                                         buy_amount_in_sol=buy_amount_in_sol,
@@ -145,6 +144,9 @@ class NewTokenWatcher:
                                     ),
                                     name=f"https://photon-sol.tinyastro.io/en/lp/{pair_address}",
                                 )
+                                task.add_done_callback(tasks.discard)
+
+                                tasks.add(task)
 
                                 self.info("")
                                 self.info("=" * 80)
@@ -152,11 +154,17 @@ class NewTokenWatcher:
                                 self.info("=" * 80)
 
             except KeyboardInterrupt:
+                for task in tasks:
+                    task.cancel()
+
+                    try:
+                        await task
+                    except asyncio.CancelledError:
+                        pass
+
                 return
             except Exception as e:
-                end = time.time()
-                duration = end - start
                 traceback.print_exc()
-                print(f"Time: {duration:.2f}s")
                 print(f"Type: {type(e)}")
                 print(f"Message: {e}")
+                await asyncio.sleep(0)  # aka run any another task
