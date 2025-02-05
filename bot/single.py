@@ -28,7 +28,7 @@ async def main():
         buy_amount_in_sol=0.01,
         # sell_amount_in_percent=100,
         sell_amount_in_percent=profit,
-        min_amount_in_sol=450,
+        min_amount_in_sol=1450,
         take_profit=profit,
         stop_loss=-30.0,
         delay=0,

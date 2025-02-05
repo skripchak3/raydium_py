@@ -178,6 +178,7 @@ def sell(
     client: Client,
     sender: Keypair,
     percentage: int,
+    initial_token_balance: float,
     slippage: int,
     pool_keys: AmmV4PoolKeys,
     gas_config: GasConfig,
@@ -193,16 +194,20 @@ def sell(
         )
 
         print("Retrieving token balance...")
-        token_balance = get_token_balance(
+        current_token_balance = get_token_balance(
             client=client, sender_address=sender_address, token_address=mint
         )
-        print("Token Balance:", token_balance)
+        print("Token Balance:", current_token_balance)
 
-        if token_balance == 0 or token_balance is None:
+        if current_token_balance == 0 or current_token_balance is None:
             print("No token balance available to sell.")
             return False
-
-        token_balance = token_balance * (percentage / 100)
+        
+        
+        token_balance = initial_token_balance * (percentage / 100)
+        if current_token_balance < token_balance:
+            token_balance = current_token_balance
+        
         print(
             f"Selling {percentage}% of the token balance, adjusted balance: {token_balance}"
         )

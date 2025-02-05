@@ -4,6 +4,7 @@ from mixins.buyer import BuyParams
 from mixins.seller import SellParams
 from ops import Op
 from raydium_py.utils.pool_utils import AmmV4PoolKeys
+from raydium_py.utils.common_utils import get_token_balance
 
 
 class SingleTokenWatcher:
@@ -30,11 +31,14 @@ class SingleTokenWatcher:
             percentage=sell_amount_in_percent,
             slippage=sell_slippage,
             gas_config=self.gas_config,
+            initial_token_balance=initial_token_balance,
         )
 
         bought_price = None
 
         pool_state = None
+
+        initial_token_balance = None
 
         self.info(
             f"""Token address:
@@ -99,6 +103,7 @@ class SingleTokenWatcher:
                         pool_state = self.get_pool_state(self.client, pool_keys)
                         # await self.macd()
                         bought_price = pool_state.quote_price
+                        initial_token_balance = get_token_balance(self.client, pool_keys.token_address)
                         self.bought_beeper()
                         self.open_browser(pool_keys.pair_address)
                         self.info(
@@ -121,10 +126,13 @@ class SingleTokenWatcher:
                         current_price = pool_state.quote_price
                         profit = (current_price / bought_price) * 100 - 100
                         profit = round(profit, self.profit_precision)
+                        current_token_balance = get_token_balance(self.client, pool_keys.token_address)
 
                         self.info(
                             f"#{i:03d} {pool_keys.token_address} [{pool_state.quote_reserve:7.2f} SOL]  {{{current_price:.{self.price_precision}f}}}  ({profit:.{self.profit_precision}f}%/{take_profit:.{self.profit_precision}f}%)"
                         )
+                        if current_token_balance == 0:
+                            op = Op.BUY
 
                         if profit >= take_profit:
                             sell_params.percentage = take_profit
