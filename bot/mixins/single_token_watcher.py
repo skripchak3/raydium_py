@@ -21,7 +21,6 @@ class SingleTokenWatcher:
         delay: float = 30.0,
         op: Op = Op.CHECK,
     ):
-
         buy_params = BuyParams(
             sol_in=buy_amount_in_sol,
             slippage=buy_slippage,
@@ -31,7 +30,7 @@ class SingleTokenWatcher:
             percentage=sell_amount_in_percent,
             slippage=sell_slippage,
             gas_config=self.gas_config,
-            initial_token_balance=None,
+            initial_token_balance=0,
         )
 
         bought_price = None

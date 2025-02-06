@@ -10,6 +10,7 @@ class SellParams:
     percentage: float
     slippage: int
     gas_config: GasConfig
+    initial_token_balance: float
 
 
 class SellerMixin:
