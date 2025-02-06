@@ -95,6 +95,7 @@ class SingleTokenWatcher:
                         )
                         op = Op.BUY
                     else:
+                        self.info('Skiping...')
                         op = Op.EXIT
 
                 case Op.BUY:
@@ -103,9 +104,12 @@ class SingleTokenWatcher:
                         pool_state = self.get_pool_state(self.client, pool_keys)
                         # await self.macd()
                         bought_price = pool_state.quote_price
-                        initial_token_balance = get_token_balance(self.client, pool_keys.token_address)
+
+                        sender_address = self.sender.pubkey()
+                        initial_token_balance = get_token_balance(self.client, sender_address, pool_keys.token_address)
                         sell_params.initial_token_balance = initial_token_balance
                         remaining = initial_token_balance
+                        
                         self.bought_beeper()
                         self.open_browser(pool_keys.pair_address)
                         self.info(
