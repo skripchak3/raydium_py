@@ -39,6 +39,7 @@ class SingleTokenWatcher:
 
         initial_token_balance = None
         remaining = None
+        all_profit = 0
 
         self.info(
             f"""Token address:
@@ -104,6 +105,7 @@ class SingleTokenWatcher:
                         pool_state = self.get_pool_state(self.client, pool_keys)
                         # await self.macd()
                         bought_price = pool_state.quote_price
+                        all_profit = 0
 
                         sender_address = self.sender.pubkey()
                         initial_token_balance = get_token_balance(self.client, sender_address, pool_keys.token_address)
@@ -130,7 +132,7 @@ class SingleTokenWatcher:
                         await asyncio.sleep(self.tick)
                     else:
                         current_price = pool_state.quote_price
-                        profit = (current_price / bought_price) * 100 - 100
+                        profit = ((current_price / bought_price) * 100 - 100) - all_profit
                         profit = round(profit, self.profit_precision)
                         sell_amount_token = initial_token_balance * (take_profit / 100)
 
@@ -166,7 +168,8 @@ class SingleTokenWatcher:
                         self.info(
                             f"Swapped {pool_keys.token_address} for ~{buy_amount_in_sol:.{self.amount_precision}f} SOL at price {sold_price:.{self.price_precision}f} SOL/X!"
                         )
-                        bought_price = pool_state.quote_price
+                        all_profit += take_profit
+                        # bought_price = pool_state.quote_price
 
                         if (
                             pool_state.base_reserve <= 1
