@@ -1,4 +1,5 @@
 import asyncio
+import sys
 
 import uvloop
 from solders.solders import Pubkey
@@ -11,7 +12,7 @@ from raydium_py.utils.pool_utils import fetch_amm_v4_pool_keys
 async def main():
     bot = RaydiumBot(dry_run=False, private_key=None)
 
-    pair_address = ""
+    pair_address = sys.argv[2]
     if not pair_address:
         raise Exception("no pair address provided")
 

@@ -1,0 +1,7 @@
+*.deb
+*.crx
+node_modules/
+profiles/
+extensions/
+coins/
+users.json

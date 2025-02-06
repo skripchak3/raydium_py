@@ -136,4 +136,10 @@ class ArgsParser:
             help="Delay in seconds before each check cycle (default: 30.0)",
         )
 
+        parser.add_argument(
+            "--pair",
+            type=str,
+            default="",
+            help="Pair address",
+        )
         return parser.parse_args()
