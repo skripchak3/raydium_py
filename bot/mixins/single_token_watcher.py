@@ -140,7 +140,7 @@ class SingleTokenWatcher:
                             f"#{i:03d} {pool_keys.token_address} [{pool_state.quote_reserve:7.2f} SOL]  {{{current_price:.{self.price_precision}f}}}  ({profit:.{self.profit_precision}f}%/{take_profit:.{self.profit_precision}f}%)"
                         )
                         self.info(remaining)
-                        if remaining <= 0:
+                        if remaining < sell_amount_token:
                             op = Op.BUY
 
                         if profit >= take_profit:
