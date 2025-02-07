@@ -8,4 +8,4 @@ RUN pip install -r requirements.txt && pip install -U solders
 COPY bot bot
 WORKDIR /app/bot
 
-ENTRYPOINT ["python", "./new.py"]
+ENTRYPOINT ["python", "./single.py"]

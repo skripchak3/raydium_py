@@ -53,13 +53,15 @@ async function connectBrowser() {
         } catch { }
     });
 
+    let i = 0;
+
     try {
         await page.goto(PHOTON_URL, { waitUntil: 'networkidle2', timeout: 60000 });
         await page.exposeFunction('handleNewElement', async (coin) => {
             const coinInfo = await startAnalyzeCoinByTime(browser, coin);
             if (coinInfo) {
                 console.log(coinInfo);
-                exec(`docker run -d --env-file .env --name bot --pair raydium ${coinInfo.pair_address}`, (error, stdout, stderr) => {
+                exec(`echo 123qazzaq | sudo -S docker run -d --env-file .env --name bot${i} raydium --pair ${coinInfo.pair_address}`, (error, stdout, stderr) => {
                     console.log(error);
                     console.log(stderr);
                 })

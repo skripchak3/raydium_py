@@ -39,6 +39,7 @@ class SingleTokenWatcher:
 
         initial_token_balance = None
         remaining = None
+        all_profit = 0
 
         self.info(
             f"""Token address:
@@ -104,6 +105,7 @@ class SingleTokenWatcher:
                         pool_state = self.get_pool_state(self.client, pool_keys)
                         # await self.macd()
                         bought_price = pool_state.quote_price
+                        all_profit = 0
 
                         sender_address = self.sender.pubkey()
                         initial_token_balance = get_token_balance(self.client, sender_address, pool_keys.token_address)
@@ -130,18 +132,19 @@ class SingleTokenWatcher:
                         await asyncio.sleep(self.tick)
                     else:
                         current_price = pool_state.quote_price
-                        profit = (current_price / bought_price) * 100 - 100
+                        profit = ((current_price / bought_price) * 100 - 100) - all_profit
                         profit = round(profit, self.profit_precision)
                         sell_amount_token = initial_token_balance * (take_profit / 100)
 
                         self.info(
                             f"#{i:03d} {pool_keys.token_address} [{pool_state.quote_reserve:7.2f} SOL]  {{{current_price:.{self.price_precision}f}}}  ({profit:.{self.profit_precision}f}%/{take_profit:.{self.profit_precision}f}%)"
                         )
-                        if remaining < sell_amount_token:
+                        self.info(remaining)
+                        if remaining <= 0:
                             op = Op.BUY
 
                         if profit >= take_profit:
-                            remaining -= sell_amount_token
+                            # remaining -= sell_amount_token
                             sell_params.percentage = take_profit
                             op = Op.SELL
                         elif profit <= stop_loss:
@@ -166,7 +169,9 @@ class SingleTokenWatcher:
                         self.info(
                             f"Swapped {pool_keys.token_address} for ~{buy_amount_in_sol:.{self.amount_precision}f} SOL at price {sold_price:.{self.price_precision}f} SOL/X!"
                         )
-                        bought_price = pool_state.quote_price
+                        # bought_price = pool_state.quote_price
+                        all_profit += take_profit
+                        remaining -= initial_token_balance * (take_profit / 100)
 
                         if (
                             pool_state.base_reserve <= 1

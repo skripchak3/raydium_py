@@ -197,7 +197,7 @@ def sell(
         current_token_balance = get_token_balance(
             client=client, sender_address=sender_address, token_address=mint
         )
-        print("Token Balance:", current_token_balance)
+        print("Current Token Balance:", current_token_balance)
 
         if current_token_balance == 0 or current_token_balance is None:
             print("No token balance available to sell.")
@@ -205,8 +205,13 @@ def sell(
         
         
         token_balance = initial_token_balance * (percentage / 100)
-        if current_token_balance < token_balance or percentage == 100:
+        if current_token_balance <= token_balance or percentage == 100:
+            print("Initial tokens < Current tokens")
             token_balance = current_token_balance
+
+        if token_balance == 0 or token_balance is None:
+            print("No token balance available to sell.")
+            return False
         
         print(
             f"Selling {percentage}% of the token balance, adjusted balance: {token_balance}"
